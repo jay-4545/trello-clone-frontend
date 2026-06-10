@@ -1,9 +1,7 @@
-// src/app/workspaces/page.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Briefcase, Search, LayoutGrid, List } from "lucide-react";
-import { toast } from "sonner";
 
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -34,16 +32,16 @@ export default function WorkspacesPage() {
     return (
         <div className="min-h-full">
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
-                    <div className="flex-1">
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md border-b border-slate-200">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+                    <div className="flex-1 min-w-0">
                         <h1 className="text-lg font-bold text-slate-900">Workspaces</h1>
-                        <p className="text-sm text-slate-500 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-0.5">
                             {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-56">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex-1 sm:flex-initial sm:w-56 min-w-[160px]">
                             <Input
                                 placeholder="Search workspaces…"
                                 value={search}
@@ -51,13 +49,14 @@ export default function WorkspacesPage() {
                                 leftElement={<Search className="h-3.5 w-3.5" />}
                             />
                         </div>
-                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="hidden sm:flex items-center border border-slate-200 rounded-lg overflow-hidden">
                             <button
                                 onClick={() => setViewMode("grid")}
                                 className={`flex items-center justify-center h-9 w-9 transition-colors ${viewMode === "grid"
                                     ? "bg-blue-50 text-blue-600"
                                     : "bg-white text-slate-400 hover:text-slate-600"
                                     }`}
+                                aria-label="Grid view"
                             >
                                 <LayoutGrid className="h-4 w-4" />
                             </button>
@@ -67,6 +66,7 @@ export default function WorkspacesPage() {
                                     ? "bg-blue-50 text-blue-600"
                                     : "bg-white text-slate-400 hover:text-slate-600"
                                     }`}
+                                aria-label="List view"
                             >
                                 <List className="h-4 w-4" />
                             </button>
@@ -75,14 +75,15 @@ export default function WorkspacesPage() {
                             leftIcon={<Plus className="h-4 w-4" />}
                             onClick={() => setCreateOpen(true)}
                         >
-                            New workspace
+                            <span className="hidden sm:inline">New workspace</span>
+                            <span className="sm:hidden">New</span>
                         </Button>
                     </div>
                 </div>
             </div>
 
             {/* Content */}
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
                 {isLoading && (
                     <div className={viewMode === "grid"
                         ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -186,12 +187,12 @@ function WorkspaceListRow({
                 )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-slate-400">/{workspace.slug}</span>
+                <span className="hidden sm:inline text-xs text-slate-400">/{workspace.slug}</span>
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onEdit(workspace); }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 >
                     Edit
                 </Button>

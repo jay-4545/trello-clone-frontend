@@ -1,4 +1,5 @@
-// src/app/page.tsx
+"use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -11,8 +12,15 @@ import {
   Shield,
   ChevronRight,
 } from "lucide-react";
+import { token } from "@/utils/token";
 
 export default function HomePage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setIsLoggedIn(!!token.getAccess());
+  }, []);
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Navbar */}
@@ -42,29 +50,43 @@ export default function HomePage() {
             >
               How it works
             </a>
-            <a
-              href="#pricing"
-              className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              Pricing
-            </a>
+            {!isLoggedIn && (
+              <a
+                href="#pricing"
+                className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Pricing
+              </a>
+            )}
           </nav>
 
           {/* CTA */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors px-3 py-2"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
-            >
-              Get started free
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/workspaces"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+              >
+                Go to Dashboard
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors px-3 py-2"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/register"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+                >
+                  Get started free
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -87,7 +109,7 @@ export default function HomePage() {
               <h1 className="text-5xl lg:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
                 Organise your
                 <br />
-                <span className="text-blue-200">team's work,</span>
+                <span className="text-blue-200">team&apos;s work,</span>
                 <br />
                 visually.
               </h1>
@@ -98,19 +120,31 @@ export default function HomePage() {
               </p>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <Link
-                  href="/register"
-                  className="inline-flex items-center gap-2 text-base font-semibold text-blue-700 bg-white hover:bg-blue-50 active:bg-blue-100 px-6 py-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-colors"
-                >
-                  Start for free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 text-base font-medium text-white/90 hover:text-white border border-white/30 hover:border-white/60 px-6 py-3.5 rounded-xl transition-all"
-                >
-                  Sign in
-                </Link>
+                {isLoggedIn ? (
+                  <Link
+                    href="/workspaces"
+                    className="inline-flex items-center gap-2 text-base font-semibold text-blue-700 bg-white hover:bg-blue-50 active:bg-blue-100 px-6 py-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-colors"
+                  >
+                    Open Dashboard
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href="/register"
+                      className="inline-flex items-center gap-2 text-base font-semibold text-blue-700 bg-white hover:bg-blue-50 active:bg-blue-100 px-6 py-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-colors"
+                    >
+                      Start for free
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                    <Link
+                      href="/login"
+                      className="inline-flex items-center gap-2 text-base font-medium text-white/90 hover:text-white border border-white/30 hover:border-white/60 px-6 py-3.5 rounded-xl transition-all"
+                    >
+                      Sign in
+                    </Link>
+                  </>
+                )}
               </div>
 
               {/* Stats */}
@@ -185,12 +219,13 @@ export default function HomePage() {
                           >
                             <div className="flex items-center justify-between mb-2">
                               <span
-                                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${card.priority === "critical"
+                                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+                                  card.priority === "critical"
                                     ? "bg-red-500/30 text-red-200"
                                     : card.priority === "high"
-                                      ? "bg-orange-500/30 text-orange-200"
-                                      : "bg-blue-400/30 text-blue-200"
-                                  }`}
+                                    ? "bg-orange-500/30 text-orange-200"
+                                    : "bg-blue-400/30 text-blue-200"
+                                }`}
                               >
                                 {card.priority}
                               </span>
@@ -300,7 +335,9 @@ export default function HomePage() {
             <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
               Up and running in minutes
             </h2>
-            <p className="text-slate-500 text-lg">Three simple steps to get your team organised.</p>
+            <p className="text-slate-500 text-lg">
+              Three simple steps to get your team organised.
+            </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[
@@ -338,24 +375,26 @@ export default function HomePage() {
       </section>
 
       {/* CTA Banner */}
-      <section className="bg-gradient-to-r from-blue-600 to-indigo-700 py-20">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
-            Ready to get organised?
-          </h2>
-          <p className="text-blue-100 text-lg mb-8">
-            Join thousands of teams already using Taskboard. Free forever for
-            small teams.
-          </p>
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-2 text-base font-semibold text-blue-700 bg-white hover:bg-blue-50 px-8 py-4 rounded-xl shadow-lg transition-colors"
-          >
-            Create your free account
-            <ChevronRight className="h-5 w-5" />
-          </Link>
-        </div>
-      </section>
+      {!isLoggedIn && (
+        <section className="bg-gradient-to-r from-blue-600 to-indigo-700 py-20">
+          <div className="max-w-3xl mx-auto px-6 text-center">
+            <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
+              Ready to get organised?
+            </h2>
+            <p className="text-blue-100 text-lg mb-8">
+              Join thousands of teams already using Taskboard. Free forever for
+              small teams.
+            </p>
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-2 text-base font-semibold text-blue-700 bg-white hover:bg-blue-50 px-8 py-4 rounded-xl shadow-lg transition-colors"
+            >
+              Create your free account
+              <ChevronRight className="h-5 w-5" />
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-10">
@@ -370,12 +409,20 @@ export default function HomePage() {
             © {new Date().getFullYear()} Taskboard. Built with ❤️ for productive teams.
           </p>
           <div className="flex items-center gap-4 text-xs">
-            <Link href="/login" className="hover:text-white transition-colors">
-              Login
-            </Link>
-            <Link href="/register" className="hover:text-white transition-colors">
-              Register
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/workspaces" className="hover:text-white transition-colors">
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="hover:text-white transition-colors">
+                  Login
+                </Link>
+                <Link href="/register" className="hover:text-white transition-colors">
+                  Register
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </footer>

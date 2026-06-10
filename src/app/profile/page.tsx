@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 import { Button, Input } from "@/components/ui";
 import Avatar from "@/components/ui/Avatar";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import AppShell from "@/components/layout/AppShell";
 import { useAppDispatch } from "@/store";
 import { logout } from "@/store/slices/authSlice";
@@ -290,37 +291,16 @@ function ProfilePageContent() {
                                 </div>
                             </div>
 
-                            {/* Logout button */}
-                            {!logoutConfirm ? (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    leftIcon={<LogOut className="h-3.5 w-3.5" />}
-                                    onClick={() => setLogoutConfirm(true)}
-                                    className="text-slate-600 shrink-0"
-                                >
-                                    Sign out
-                                </Button>
-                            ) : (
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-xs text-slate-500">Are you sure?</span>
-                                    <Button
-                                        variant="danger"
-                                        size="sm"
-                                        loading={loggingOut}
-                                        onClick={handleLogout}
-                                    >
-                                        Yes, sign out
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setLogoutConfirm(false)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            )}
+                            {/* Sign out */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={<LogOut className="h-3.5 w-3.5" />}
+                                onClick={() => setLogoutConfirm(true)}
+                                className="text-slate-600 shrink-0"
+                            >
+                                Sign out
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -501,13 +481,27 @@ function ProfilePageContent() {
                         variant="danger"
                         size="sm"
                         leftIcon={<LogOut className="h-4 w-4" />}
-                        loading={loggingOut}
-                        onClick={handleLogout}
+                        onClick={() => setLogoutConfirm(true)}
                     >
                         Sign out of Taskboard
                     </Button>
                 </div>
             </div>
+
+            {/* Sign-out confirmation */}
+            <ConfirmDialog
+                open={logoutConfirm}
+                onClose={() => setLogoutConfirm(false)}
+                onConfirm={async () => {
+                    await handleLogout();
+                    setLogoutConfirm(false);
+                }}
+                loading={loggingOut}
+                title="Sign out of Taskboard?"
+                description="You'll need to sign in again to access your workspaces and boards."
+                confirmLabel="Sign out"
+                cancelLabel="Stay signed in"
+            />
         </div>
     );
 }

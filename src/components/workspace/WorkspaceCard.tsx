@@ -89,46 +89,67 @@ export default function WorkspaceCard({ workspace, onEdit }: Props) {
 
                     {/* Kebab menu */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
+                        <button
+                            type="button"
+                            className={`flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all ${
+                                menuOpen
+                                    ? "opacity-100 bg-slate-100 text-slate-700"
+                                    : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            }`}
                             onClick={() => setMenuOpen((v) => !v)}
                             aria-label="Workspace options"
+                            aria-expanded={menuOpen}
                         >
                             <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        </button>
 
                         {menuOpen && (
                             <>
                                 <div
-                                    className="fixed inset-0 z-10"
+                                    className="fixed inset-0 z-30"
                                     onClick={() => setMenuOpen(false)}
                                 />
-                                <div className="absolute right-0 top-8 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                <div className="absolute right-0 top-9 z-40 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 min-w-[200px] animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150 origin-top-right">
+                                    <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                            Workspace actions
+                                        </p>
+                                    </div>
                                     {canEdit && (
                                         <button
-                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                             onClick={() => {
                                                 setMenuOpen(false);
                                                 onEdit?.(workspace);
                                             }}
                                         >
-                                            <Pencil className="h-4 w-4" />
-                                            Edit workspace
+                                            <span className="flex items-center justify-center h-7 w-7 rounded-md bg-blue-50 text-blue-600">
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </span>
+                                            <span className="flex-1 text-left">Edit workspace</span>
                                         </button>
                                     )}
+                                    {!canEdit && (
+                                        <div className="px-3 py-2 text-xs text-slate-400 italic">
+                                            You don&apos;t have permission to edit this workspace.
+                                        </div>
+                                    )}
                                     {isOwner && (
-                                        <button
-                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                                            onClick={() => {
-                                                setMenuOpen(false);
-                                                setConfirmDelete(true);
-                                            }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                            Delete workspace
-                                        </button>
+                                        <>
+                                            <div className="my-1 border-t border-slate-100" />
+                                            <button
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                                onClick={() => {
+                                                    setMenuOpen(false);
+                                                    setConfirmDelete(true);
+                                                }}
+                                            >
+                                                <span className="flex items-center justify-center h-7 w-7 rounded-md bg-red-50 text-red-600">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </span>
+                                                <span className="flex-1 text-left">Delete workspace</span>
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </>

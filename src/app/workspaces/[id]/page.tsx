@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
     Plus,
     Star,
@@ -10,19 +10,25 @@ import {
     LayoutGrid,
     UserPlus,
     ChevronRight,
+    RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
 import Button from "@/components/ui/Button";
-import Badge from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui";
 import EmptyState from "@/components/ui/EmptyState";
+import RoleBadge from "@/components/roles/RoleBadge";
+import ViewOnlyBanner from "@/components/roles/ViewOnlyBanner";
+import AdminReturnBanner from "@/components/admin/AdminReturnBanner";
 import CreateBoardModal from "@/components/workspace/CreateBoardModal";
 import InviteMemberModal from "@/components/workspace/InviteMemberModal";
+import WorkspaceMembersModal from "@/components/workspace/WorkspaceMembersModal";
 import { useGetWorkspaceQuery, useGetWorkspaceMembersQuery } from "@/lib/api/workspaceApi";
 import { useGetBoardsQuery, useUpdateBoardMutation } from "@/lib/api/boardApi";
+import { useGetProfileQuery } from "@/lib/api/authApi";
 import type { Board } from "@/lib/api/boardApi";
+import { useWorkspacePermissions } from "@/hooks/usePermissions";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
 
@@ -31,13 +37,6 @@ const BOARD_COLORS = [
     "#C377E0", "#FF78CB", "#00C2E0", "#0052CC",
     "#519839", "#B04632", "#89609E", "#CD5A91",
 ];
-
-const ROLE_VARIANT: Record<string, "success" | "info" | "warning" | "default"> = {
-    owner: "success",
-    admin: "info",
-    member: "default",
-    viewer: "warning",
-};
 
 function getBoardColor(board: Board): string {
     if (board.background) return board.background;
@@ -48,23 +47,30 @@ export default function WorkspaceDetailPage() {
     const params = useParams();
     const workspaceId = Number(params.id);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const fromAdmin = searchParams.get("from") === "admin";
 
     const [createBoardOpen, setCreateBoardOpen] = useState(false);
     const [inviteOpen, setInviteOpen] = useState(false);
+    const [membersOpen, setMembersOpen] = useState(false);
 
     const { data: wsData, isLoading: wsLoading } = useGetWorkspaceQuery(workspaceId);
     const { data: boardsData, isLoading: boardsLoading } = useGetBoardsQuery(workspaceId);
+    const { data: closedBoardsData } = useGetBoardsQuery({ workspaceId, closedOnly: true });
     const { data: membersData } = useGetWorkspaceMembersQuery(workspaceId);
+    const { data: profileData } = useGetProfileQuery();
     const [updateBoard] = useUpdateBoardMutation();
 
     const workspace = wsData?.data;
     const allBoards = boardsData?.data ?? [];
     const members = membersData?.data ?? [];
+    const currentUserId = profileData?.data?.id;
 
     const activeBoards = allBoards.filter((b) => !b.isClosed);
+    const closedBoards = closedBoardsData?.data ?? [];
     const starredBoards = activeBoards.filter((b) => b.isStarred);
 
-    const canManage = workspace?.myRole === "owner" || workspace?.myRole === "admin";
+    const { canManage, canCreateBoard, canInvite, isViewer } = useWorkspacePermissions(workspace?.myRole);
 
     const handleToggleStar = async (board: Board, e: React.MouseEvent) => {
         e.preventDefault();
@@ -75,6 +81,19 @@ export default function WorkspaceDetailPage() {
                 boardId: board.id,
                 body: { isStarred: !board.isStarred },
             }).unwrap();
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const handleReopenBoard = async (board: Board) => {
+        try {
+            await updateBoard({
+                workspaceId,
+                boardId: board.id,
+                body: { isClosed: false },
+            }).unwrap();
+            toast.success(`"${board.name}" reopened`);
         } catch (err) {
             toast.error(parseApiError(err));
         }
@@ -106,6 +125,10 @@ export default function WorkspaceDetailPage() {
 
     return (
         <div className="min-h-full bg-slate-50">
+            {fromAdmin && <AdminReturnBanner href="/admin/workspaces" />}
+            {isViewer && (
+                <ViewOnlyBanner message="You're a workspace viewer. You can browse boards but cannot create or edit them." />
+            )}
             {/* Workspace header */}
             <div className="bg-white border-b border-slate-200">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
@@ -123,9 +146,7 @@ export default function WorkspaceDetailPage() {
                                         {workspace.name}
                                     </h1>
                                     {workspace.myRole && (
-                                        <Badge variant={ROLE_VARIANT[workspace.myRole] ?? "default"}>
-                                            {workspace.myRole}
-                                        </Badge>
+                                        <RoleBadge role={workspace.myRole} scope="workspace" />
                                     )}
                                 </div>
                                 {workspace.description && (
@@ -135,7 +156,7 @@ export default function WorkspaceDetailPage() {
                                 )}
                                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                     <button
-                                        onClick={() => setInviteOpen(true)}
+                                        onClick={() => setMembersOpen(true)}
                                         className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
                                     >
                                         <Users className="h-3.5 w-3.5" />
@@ -150,7 +171,7 @@ export default function WorkspaceDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                            {canManage && (
+                            {canInvite && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -161,14 +182,16 @@ export default function WorkspaceDetailPage() {
                                     Invite
                                 </Button>
                             )}
-                            <Button
-                                size="sm"
-                                leftIcon={<Plus className="h-3.5 w-3.5" />}
-                                onClick={() => setCreateBoardOpen(true)}
-                                className="flex-1 sm:flex-initial"
-                            >
-                                New board
-                            </Button>
+                            {canCreateBoard && (
+                                <Button
+                                    size="sm"
+                                    leftIcon={<Plus className="h-3.5 w-3.5" />}
+                                    onClick={() => setCreateBoardOpen(true)}
+                                    className="flex-1 sm:flex-initial"
+                                >
+                                    New board
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -190,6 +213,7 @@ export default function WorkspaceDetailPage() {
                                     board={board}
                                     workspaceId={workspaceId}
                                     onToggleStar={handleToggleStar}
+                                    canStar={canCreateBoard}
                                 />
                             ))}
                         </div>
@@ -201,7 +225,9 @@ export default function WorkspaceDetailPage() {
                     <div className="flex items-center justify-between mb-3 sm:mb-4">
                         <div className="flex items-center gap-2">
                             <LayoutGrid className="h-4 w-4 text-slate-400" />
-                            <h2 className="text-sm font-semibold text-slate-700">Your boards</h2>
+                            <h2 className="text-sm font-semibold text-slate-700">
+                                {isViewer ? "Available boards" : "Your boards"}
+                            </h2>
                             {activeBoards.length > 0 && (
                                 <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                                     {activeBoards.length}
@@ -220,19 +246,57 @@ export default function WorkspaceDetailPage() {
                                     board={board}
                                     workspaceId={workspaceId}
                                     onToggleStar={handleToggleStar}
+                                    canStar={canCreateBoard}
                                 />
                             ))}
 
-                            <button
-                                onClick={() => setCreateBoardOpen(true)}
-                                className="h-[100px] rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-blue-500 transition-all group"
-                            >
-                                <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                                <span className="text-xs font-medium">Create board</span>
-                            </button>
+                            {canCreateBoard && (
+                                <button
+                                    onClick={() => setCreateBoardOpen(true)}
+                                    className="h-[100px] rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-blue-500 transition-all group"
+                                >
+                                    <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    <span className="text-xs font-medium">Create board</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </section>
+
+                {/* Closed boards */}
+                {closedBoards.length > 0 && (
+                    <section>
+                        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                            <LayoutGrid className="h-4 w-4 text-slate-400" />
+                            <h2 className="text-sm font-semibold text-slate-700">Closed boards</h2>
+                        </div>
+                        <div className="space-y-2">
+                            {closedBoards.map((board) => (
+                                <div
+                                    key={board.id}
+                                    className="flex items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-slate-900 truncate">{board.name}</p>
+                                        {board.description && (
+                                            <p className="text-xs text-slate-500 truncate">{board.description}</p>
+                                        )}
+                                    </div>
+                                    {canManage && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleReopenBoard(board)}
+                                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                                        >
+                                            Reopen
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* Members quick-view */}
                 {members.length > 0 && (
@@ -242,15 +306,13 @@ export default function WorkspaceDetailPage() {
                                 <Users className="h-4 w-4 text-slate-400" />
                                 <h2 className="text-sm font-semibold text-slate-700">Members</h2>
                             </div>
-                            {canManage && (
-                                <button
-                                    onClick={() => setInviteOpen(true)}
-                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                                >
-                                    Invite member
-                                    <ChevronRight className="h-3 w-3" />
-                                </button>
-                            )}
+                            <button
+                                onClick={() => setMembersOpen(true)}
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                            >
+                                {canManage ? "Manage members" : "View members"}
+                                <ChevronRight className="h-3 w-3" />
+                            </button>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {members.map((m) => (
@@ -263,7 +325,7 @@ export default function WorkspaceDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-xs font-medium text-slate-800">{m.user.name}</p>
-                                        <p className="text-[10px] text-slate-400">{m.role}</p>
+                                        <RoleBadge role={m.role} scope="workspace" className="mt-0.5" />
                                     </div>
                                 </div>
                             ))}
@@ -282,6 +344,14 @@ export default function WorkspaceDetailPage() {
                 onClose={() => setInviteOpen(false)}
                 workspaceId={workspaceId}
             />
+            <WorkspaceMembersModal
+                open={membersOpen}
+                onClose={() => setMembersOpen(false)}
+                workspaceId={workspaceId}
+                canManage={canManage}
+                currentUserId={currentUserId}
+                ownerId={workspace.ownerId}
+            />
         </div>
     );
 }
@@ -290,10 +360,12 @@ function BoardCard({
     board,
     workspaceId,
     onToggleStar,
+    canStar = true,
 }: {
     board: Board;
     workspaceId: number;
     onToggleStar: (board: Board, e: React.MouseEvent) => void;
+    canStar?: boolean;
 }) {
     const bgColor = getBoardColor(board);
 
@@ -318,25 +390,27 @@ function BoardCard({
                         </div>
                     )}
                 </div>
-                <button
-                    onClick={(e) => onToggleStar(board, e)}
-                    className={cn(
-                        "flex items-center justify-center h-6 w-6 rounded transition-all hover:bg-black/20",
-                        board.isStarred
-                            ? "opacity-100"
-                            : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                    )}
-                    title={board.isStarred ? "Unstar board" : "Star board"}
-                >
-                    <Star
+                {canStar && (
+                    <button
+                        onClick={(e) => onToggleStar(board, e)}
                         className={cn(
-                            "h-3.5 w-3.5",
+                            "flex items-center justify-center h-6 w-6 rounded transition-all hover:bg-black/20",
                             board.isStarred
-                                ? "fill-amber-300 text-amber-300"
-                                : "text-white/70 hover:text-white"
+                                ? "opacity-100"
+                                : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                         )}
-                    />
-                </button>
+                        title={board.isStarred ? "Unstar board" : "Star board"}
+                    >
+                        <Star
+                            className={cn(
+                                "h-3.5 w-3.5",
+                                board.isStarred
+                                    ? "fill-amber-300 text-amber-300"
+                                    : "text-white/70 hover:text-white"
+                            )}
+                        />
+                    </button>
+                )}
             </div>
 
             <div className="relative z-10">

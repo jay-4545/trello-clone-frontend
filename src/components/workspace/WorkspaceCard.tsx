@@ -12,8 +12,9 @@ import {
 import { toast } from "sonner";
 
 import Avatar from "@/components/ui/Avatar";
-import Badge from "@/components/ui/Badge";
+import RoleBadge from "@/components/roles/RoleBadge";
 import Button from "@/components/ui/Button";
+import { useWorkspacePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useDeleteWorkspaceMutation } from "@/lib/api/workspaceApi";
 import { parseApiError } from "@/utils/errorParser";
@@ -24,21 +25,13 @@ interface Props {
     onEdit?: (workspace: Workspace) => void;
 }
 
-const ROLE_VARIANT: Record<string, "success" | "info" | "warning" | "default"> = {
-    owner: "success",
-    admin: "info",
-    member: "default",
-    viewer: "warning",
-};
-
 export default function WorkspaceCard({ workspace, onEdit }: Props) {
     const router = useRouter();
     const [deleteWorkspace, { isLoading: deleting }] = useDeleteWorkspaceMutation();
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    const isOwner = workspace.myRole === "owner";
-    const canEdit = workspace.myRole === "owner" || workspace.myRole === "admin";
+    const { isOwner, canManage: canEdit } = useWorkspacePermissions(workspace.myRole);
 
     const handleDelete = async () => {
         try {
@@ -177,9 +170,7 @@ export default function WorkspaceCard({ workspace, onEdit }: Props) {
                         </span>
                     </div>
                     {workspace.myRole && (
-                        <Badge variant={ROLE_VARIANT[workspace.myRole] ?? "default"}>
-                            {workspace.myRole}
-                        </Badge>
+                        <RoleBadge role={workspace.myRole} scope="workspace" />
                     )}
                 </div>
             </div>

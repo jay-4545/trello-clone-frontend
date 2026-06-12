@@ -43,6 +43,12 @@ export const listApi = baseApi.injectEndpoints({
             invalidatesTags: (_r, _e, { boardId }) => [{ type: "List", id: boardId }],
         }),
 
+        getArchivedLists: build.query<ApiResponse<List[]>, { workspaceId: number; boardId: number }>({
+            query: ({ workspaceId, boardId }) =>
+                `/workspaces/${workspaceId}/boards/${boardId}/lists/archived`,
+            providesTags: (_r, _e, { boardId }) => [{ type: "List", id: `archived-${boardId}` }],
+        }),
+
     }),
     overrideExisting: false,
 });
@@ -54,4 +60,5 @@ export const {
     useArchiveListMutation,
     useDeleteListMutation,
     useReorderListsMutation,
+    useGetArchivedListsQuery,
 } = listApi;

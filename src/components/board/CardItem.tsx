@@ -28,9 +28,10 @@ interface Props {
     card: Card;
     onClick: () => void;
     isDragging?: boolean;
+    readOnly?: boolean;
 }
 
-export default function CardItem({ card, onClick, isDragging }: Props) {
+export default function CardItem({ card, onClick, isDragging, readOnly = false }: Props) {
     const {
         attributes,
         listeners,
@@ -41,6 +42,7 @@ export default function CardItem({ card, onClick, isDragging }: Props) {
     } = useSortable({
         id: `card-${card.id}`,
         data: { type: "card", card },
+        disabled: readOnly,
     });
 
     const style: React.CSSProperties = {
@@ -54,7 +56,7 @@ export default function CardItem({ card, onClick, isDragging }: Props) {
             ref={setNodeRef}
             style={style}
             {...attributes}
-            {...listeners}
+            {...(!readOnly ? listeners : {})}
             onClick={(e) => {
                 // Only fire click if not dragging
                 if (sortableDragging) return;

@@ -1,5 +1,6 @@
 import { baseApi } from "./baseApi";
 import type { ApiResponse } from "@/types/api.types";
+import type { WorkspaceRole } from "@/types/role.types";
 
 export interface Workspace {
     id: number;
@@ -9,7 +10,7 @@ export interface Workspace {
     logo: string | null;
     ownerId: number;
     isPersonal: boolean;
-    myRole?: string;
+    myRole?: WorkspaceRole;
     createdAt: string;
 }
 
@@ -17,7 +18,7 @@ export interface WorkspaceMember {
     id: number;
     workspaceId: number;
     userId: number;
-    role: string;
+    role: WorkspaceRole;
     user: { id: number; name: string; email: string; avatar: string | null };
 }
 

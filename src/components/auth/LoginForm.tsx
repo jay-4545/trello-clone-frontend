@@ -1,6 +1,6 @@
 // src/components/auth/LoginForm.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,10 +10,12 @@ import { toast } from "sonner";
 import Link from "next/link";
 
 import { Button, Input } from "@/components/ui";
-import { useLoginMutation } from "@/lib/api/authApi";
-import { setCredentials } from "@/store/slices/authSlice";
+import { useLoginMutation, useGetProfileQuery } from "@/lib/api/authApi";
+import { establishAuthSession } from "@/store/authSession";
 import { useAppDispatch } from "@/store";
 import { parseApiError } from "@/utils/errorParser";
+import { resetLoginRedirectGuard } from "@/utils/authRedirect";
+import { useAuthToken } from "@/hooks/useAuthToken";
 
 const loginSchema = z.object({
     email: z.string().email("Enter a valid email address"),
@@ -26,6 +28,8 @@ export default function LoginForm() {
     const router = useRouter();
     const dispatch = useAppDispatch();
     const [login, { isLoading }] = useLoginMutation();
+    const hasToken = useAuthToken();
+    const { data: profileData, isSuccess: profileOk } = useGetProfileQuery(undefined, { skip: !hasToken });
     const [showPassword, setShowPassword] = useState(false);
     const [serverError, setServerError] = useState<string | null>(null);
 
@@ -37,17 +41,26 @@ export default function LoginForm() {
         resolver: zodResolver(loginSchema),
     });
 
+    useEffect(() => {
+        resetLoginRedirectGuard();
+    }, []);
+
+    // Only redirect when the API confirms the session is valid (avoids stale-cookie loops)
+    useEffect(() => {
+        if (profileOk && profileData?.data) {
+            router.replace("/workspaces");
+        }
+    }, [profileOk, profileData, router]);
+
     const onSubmit = async (data: LoginForm) => {
         setServerError(null);
         try {
             const res = await login(data).unwrap();
-            dispatch(
-                setCredentials({
-                    user: res.data!.user,
-                    accessToken: res.data!.accessToken,
-                    refreshToken: res.data!.refreshToken,
-                })
-            );
+            establishAuthSession(dispatch, {
+                user: res.data!.user,
+                accessToken: res.data!.accessToken,
+                refreshToken: res.data!.refreshToken,
+            });
             toast.success(`Welcome back, ${res.data!.user.name}!`);
             router.replace("/workspaces");
         } catch (err) {

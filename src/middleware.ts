@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Anyone can visit these paths (logged in or not)
+// Anyone can visit these paths without a cookie (cookie may still be expired — validated by API)
 const PUBLIC_PATHS = ["/", "/login", "/register"];
-// Logged-in users get redirected away from these (auth-only pages)
-const AUTH_REDIRECT_PATHS = ["/login", "/register"];
 
 export function middleware(request: NextRequest) {
     const accessToken = request.cookies.get("access_token")?.value;
@@ -13,14 +11,11 @@ export function middleware(request: NextRequest) {
     const isPublic = PUBLIC_PATHS.some((p) =>
         p === "/" ? pathname === "/" : pathname.startsWith(p)
     );
-    const isAuthRedirect = AUTH_REDIRECT_PATHS.some((p) => pathname.startsWith(p));
 
+    // Only gate protected routes. Do NOT redirect /login → /workspaces here:
+    // a stale cookie caused middleware → workspaces → API 401 → /login loops.
     if (!accessToken && !isPublic) {
         return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    if (accessToken && isAuthRedirect) {
-        return NextResponse.redirect(new URL("/workspaces", request.url));
     }
 
     return NextResponse.next();

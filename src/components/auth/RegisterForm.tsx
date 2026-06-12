@@ -11,7 +11,7 @@ import Link from "next/link";
 
 import { Button, Input } from "@/components/ui";
 import { useRegisterMutation } from "@/lib/api/authApi";
-import { setCredentials } from "@/store/slices/authSlice";
+import { establishAuthSession } from "@/store/authSession";
 import { useAppDispatch } from "@/store";
 import { parseApiError } from "@/utils/errorParser";
 
@@ -63,13 +63,11 @@ export default function RegisterForm() {
         setServerError(null);
         try {
             const res = await registerUser(data).unwrap();
-            dispatch(
-                setCredentials({
-                    user: res.data!.user,
-                    accessToken: res.data!.accessToken,
-                    refreshToken: res.data!.refreshToken,
-                })
-            );
+            establishAuthSession(dispatch, {
+                user: res.data!.user,
+                accessToken: res.data!.accessToken,
+                refreshToken: res.data!.refreshToken,
+            });
             toast.success("Account created! Welcome aboard 🎉");
             router.replace("/workspaces");
         } catch (err) {

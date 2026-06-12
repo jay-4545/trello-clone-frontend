@@ -13,15 +13,19 @@ import CreateWorkspaceModal from "@/components/workspace/CreateWorkspaceModal";
 import EditWorkspaceModal from "@/components/workspace/EditWorkspaceModal";
 import { useGetMyWorkspacesQuery } from "@/lib/api/workspaceApi";
 import type { Workspace } from "@/lib/api/workspaceApi";
+import { useAuthToken } from "@/hooks/useAuthToken";
 
 export default function WorkspacesPage() {
     const router = useRouter();
+    const hasToken = useAuthToken();
     const [search, setSearch] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [createOpen, setCreateOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Workspace | null>(null);
 
-    const { data, isLoading, isError, refetch } = useGetMyWorkspacesQuery();
+    const { data, isLoading, isError, refetch } = useGetMyWorkspacesQuery(undefined, {
+        skip: !hasToken,
+    });
     const workspaces = data?.data ?? [];
 
     const filtered = workspaces.filter((ws) =>

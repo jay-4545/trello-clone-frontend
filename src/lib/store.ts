@@ -3,7 +3,6 @@ import { baseApi } from "./api/baseApi";
 import authReducer from "@/store/slices/authSlice";
 import uiReducer from "@/store/slices/uiSlice";
 import notificationReducer from "@/store/slices/notificationSlice";
-
 export const store = configureStore({
     reducer: {
         [baseApi.reducerPath]: baseApi.reducer,

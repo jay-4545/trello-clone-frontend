@@ -28,9 +28,10 @@ interface Props {
     workspaceId: number;
     boardId: number;
     onCardClick: (card: Card) => void;
+    readOnly?: boolean;
 }
 
-export default function ListColumn({ list, workspaceId, boardId, onCardClick }: Props) {
+export default function ListColumn({ list, workspaceId, boardId, onCardClick, readOnly = false }: Props) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(list.name);
@@ -52,6 +53,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
     } = useSortable({
         id: `list-${list.id}`,
         data: { type: "list", list },
+        disabled: readOnly,
     });
 
     const { setNodeRef: setDroppableRef } = useDroppable({
@@ -119,16 +121,18 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
         >
             {/* List header */}
             <div className="flex items-center gap-1 px-2 py-2 shrink-0">
-                <button
-                    {...attributes}
-                    {...listeners}
-                    className="flex items-center justify-center h-6 w-5 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing touch-none"
-                    aria-label="Drag list"
-                >
-                    <GripVertical className="h-4 w-4" />
-                </button>
+                {!readOnly && (
+                    <button
+                        {...attributes}
+                        {...listeners}
+                        className="flex items-center justify-center h-6 w-5 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing touch-none"
+                        aria-label="Drag list"
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </button>
+                )}
 
-                {editingName ? (
+                {editingName && !readOnly ? (
                     <input
                         autoFocus
                         value={nameValue}
@@ -145,8 +149,11 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
                     />
                 ) : (
                     <button
-                        onClick={() => setEditingName(true)}
-                        className="flex-1 text-left text-sm font-semibold text-slate-800 hover:bg-slate-200/60 rounded px-2 py-1 truncate"
+                        onClick={() => !readOnly && setEditingName(true)}
+                        className={cn(
+                            "flex-1 text-left text-sm font-semibold text-slate-800 rounded px-2 py-1 truncate",
+                            !readOnly && "hover:bg-slate-200/60"
+                        )}
                     >
                         {list.name}
                     </button>
@@ -154,7 +161,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
 
                 <span className="text-xs text-slate-400 px-1.5">{list.cards.length}</span>
 
-                <div className="relative">
+                {!readOnly && <div className="relative">
                     <button
                         onClick={() => setMenuOpen((v) => !v)}
                         className="flex items-center justify-center h-7 w-7 rounded hover:bg-slate-200 text-slate-500 transition-colors"
@@ -197,7 +204,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
                             </div>
                         </>
                     )}
-                </div>
+                </div>}
             </div>
 
             {/* Cards area */}
@@ -214,6 +221,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
                             key={card.id}
                             card={card}
                             onClick={() => onCardClick(card)}
+                            readOnly={readOnly}
                         />
                     ))}
                 </SortableContext>
@@ -226,7 +234,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
             </div>
 
             {/* Add card */}
-            <div className="px-2 pb-2 pt-1 shrink-0">
+            {!readOnly && <div className="px-2 pb-2 pt-1 shrink-0">
                 {addingCard ? (
                     <div className="space-y-2">
                         <textarea
@@ -286,7 +294,7 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick }: 
                         Add a card
                     </button>
                 )}
-            </div>
+            </div>}
         </div>
 
         <CreateCardModal

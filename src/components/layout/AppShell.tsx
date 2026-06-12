@@ -14,16 +14,21 @@ import {
     Briefcase,
     Menu,
     X,
+    Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useAppDispatch } from "@/store";
-import { logout } from "@/store/slices/authSlice";
+import { performLogout } from "@/store/authSession";
 import { useLogoutMutation, useGetProfileQuery } from "@/lib/api/authApi";
 import { useGetMyWorkspacesQuery } from "@/lib/api/workspaceApi";
 import { useGetUnreadCountQuery } from "@/lib/api/notificationApi";
+import { useNotificationSocket } from "@/lib/socket/useNotificationSocket";
+import { useAuthToken } from "@/hooks/useAuthToken";
+import { isSystemAdmin } from "@/hooks/usePermissions";
+import RoleBadge from "@/components/roles/RoleBadge";
 
 interface AppShellProps {
     children: React.ReactNode;
@@ -38,22 +43,23 @@ export default function AppShell({ children }: AppShellProps) {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-    const { data: profileData } = useGetProfileQuery();
-    const { data: workspacesData, isLoading: loadingWs } = useGetMyWorkspacesQuery();
-    const { data: unreadData } = useGetUnreadCountQuery();
+    const hasToken = useAuthToken();
+
+    const { data: profileData } = useGetProfileQuery(undefined, { skip: !hasToken });
+    const { data: workspacesData, isLoading: loadingWs } = useGetMyWorkspacesQuery(undefined, { skip: !hasToken });
+    const { data: unreadData } = useGetUnreadCountQuery(undefined, { skip: !hasToken });
     const [logoutMutation, { isLoading: loggingOut }] = useLogoutMutation();
+
+    useNotificationSocket(hasToken);
 
     const user = profileData?.data;
     const workspaces = workspacesData?.data ?? [];
     const unreadCount = unreadData?.data?.count ?? 0;
+    const showAdminNav = isSystemAdmin(user?.role);
+    const profileHref = showAdminNav ? "/admin/profile" : "/profile";
 
     const handleLogout = async () => {
-        try {
-            await logoutMutation().unwrap();
-        } catch {
-            // Ignore — clear locally anyway
-        }
-        dispatch(logout());
+        await performLogout(dispatch, () => logoutMutation().unwrap());
         toast.success("Signed out successfully");
         router.replace("/login");
     };
@@ -88,7 +94,7 @@ export default function AppShell({ children }: AppShellProps) {
                 </div>
 
                 <Link
-                    href="/profile"
+                    href={profileHref}
                     className="flex items-center justify-center h-9 w-9 rounded-lg hover:bg-white/10"
                     aria-label="Profile"
                 >
@@ -205,12 +211,16 @@ export default function AppShell({ children }: AppShellProps) {
                                         {ws.name[0].toUpperCase()}
                                     </div>
                                     {(!collapsed || mobileOpen) && (
-                                        <span className={cn(
-                                            "truncate flex-1",
-                                            collapsed && "lg:hidden"
-                                        )}>
-                                            {ws.name}
-                                        </span>
+                                        <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
+                                            <span className="truncate block text-sm">{ws.name}</span>
+                                            {ws.myRole && ws.myRole !== "member" && (
+                                                <RoleBadge
+                                                    role={ws.myRole}
+                                                    scope="workspace"
+                                                    className="mt-0.5 !text-[10px] !px-1.5 !py-0"
+                                                />
+                                            )}
+                                        </div>
                                     )}
                                 </Link>
                             );
@@ -235,6 +245,15 @@ export default function AppShell({ children }: AppShellProps) {
                         collapsed={collapsed && !mobileOpen}
                         active={pathname === "/workspaces"}
                     />
+                    {showAdminNav && (
+                        <SidebarLink
+                            href="/admin"
+                            icon={<Shield className="h-4 w-4" />}
+                            label="Admin"
+                            collapsed={collapsed && !mobileOpen}
+                            active={pathname.startsWith("/admin")}
+                        />
+                    )}
                     <SidebarLink
                         href="/notifications"
                         icon={
@@ -252,11 +271,11 @@ export default function AppShell({ children }: AppShellProps) {
                         active={pathname === "/notifications"}
                     />
                     <SidebarLink
-                        href="/profile"
+                        href={profileHref}
                         icon={<User className="h-4 w-4" />}
                         label="Profile"
                         collapsed={collapsed && !mobileOpen}
-                        active={pathname === "/profile"}
+                        active={pathname === profileHref}
                     />
                 </nav>
 
@@ -302,11 +321,16 @@ export default function AppShell({ children }: AppShellProps) {
                                 )}
                             >
                                 <div className="px-3 py-2 border-b border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-800 truncate">{user?.name}</p>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="text-xs font-semibold text-slate-800 truncate">{user?.name}</p>
+                                        {user?.role && user.role !== "user" && (
+                                            <RoleBadge role={user.role} scope="system" />
+                                        )}
+                                    </div>
                                     <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
                                 </div>
                                 <Link
-                                    href="/profile"
+                                    href={profileHref}
                                     className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                     onClick={() => setUserMenuOpen(false)}
                                 >

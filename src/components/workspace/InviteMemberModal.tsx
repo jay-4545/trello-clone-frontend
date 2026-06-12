@@ -1,6 +1,5 @@
-// src/components/workspace/InviteMemberModal.tsx
 "use client";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -9,7 +8,9 @@ import { Mail } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import { useInviteWorkspaceMemberMutation } from "@/lib/api/workspaceApi";
+import { WORKSPACE_INVITE_ROLES, toSelectOptions } from "@/types/role.types";
 import { parseApiError } from "@/utils/errorParser";
 
 const schema = z.object({
@@ -18,6 +19,8 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+
+const ROLE_OPTIONS = toSelectOptions(WORKSPACE_INVITE_ROLES);
 
 interface Props {
     open: boolean;
@@ -28,7 +31,7 @@ interface Props {
 export default function InviteMemberModal({ open, onClose, workspaceId }: Props) {
     const [invite, { isLoading }] = useInviteWorkspaceMemberMutation();
 
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+    const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: { role: "member" },
     });
@@ -59,20 +62,19 @@ export default function InviteMemberModal({ open, onClose, workspaceId }: Props)
                     {...register("email")}
                 />
 
-                <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-slate-700">Role</label>
-                    <select
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        {...register("role")}
-                    >
-                        <option value="viewer">Viewer — can only view boards</option>
-                        <option value="member">Member — can create and edit</option>
-                        <option value="admin">Admin — full workspace access</option>
-                    </select>
-                    {errors.role && (
-                        <p className="text-xs text-red-500">{errors.role.message}</p>
+                <Controller
+                    name="role"
+                    control={control}
+                    render={({ field }) => (
+                        <Select
+                            label="Role"
+                            options={ROLE_OPTIONS}
+                            value={field.value}
+                            onChange={field.onChange}
+                            error={errors.role?.message}
+                        />
                     )}
-                </div>
+                />
 
                 <div className="flex gap-3 pt-2">
                     <Button variant="outline" fullWidth onClick={handleClose} disabled={isLoading}>

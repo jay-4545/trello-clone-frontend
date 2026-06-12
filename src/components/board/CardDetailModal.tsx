@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     X,
     AlignLeft,
@@ -17,12 +17,16 @@ import {
     MessageSquare,
     Send,
     Edit2,
+    ImagePlus,
+    Paperclip,
+    ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { format, formatDistanceToNow } from "date-fns";
 
 import Button from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import {
     useGetCardQuery,
     useUpdateCardMutation,
@@ -33,11 +37,15 @@ import {
     useDeleteChecklistItemMutation,
     useAssignUserMutation,
     useUnassignUserMutation,
+    useUploadCoverImageMutation,
+    useUploadAttachmentMutation,
+    useDeleteAttachmentMutation,
 } from "@/lib/api/cardApi";
 import {
     useGetCommentsQuery,
     useCreateCommentMutation,
     useDeleteCommentMutation,
+    useUpdateCommentMutation,
 } from "@/lib/api/commentApi";
 import { useGetBoardMembersQuery } from "@/lib/api/boardApi";
 import { useGetProfileQuery } from "@/lib/api/authApi";
@@ -59,10 +67,22 @@ const STATUSES: { value: CardStatus; label: string }[] = [
     { value: "done", label: "Done" },
 ];
 
+const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s.value, label: s.label }));
+const PRIORITY_OPTIONS = PRIORITIES.map((p) => ({ value: p.value, label: p.label }));
+
 const LABEL_COLORS = [
     "bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-rose-500",
     "bg-violet-500", "bg-pink-500", "bg-cyan-500", "bg-orange-500",
 ];
+
+function parseAttachment(urlWithName: string) {
+    const hashIdx = urlWithName.indexOf("#");
+    if (hashIdx === -1) return { url: urlWithName, name: "Attachment" };
+    return {
+        url: urlWithName.slice(0, hashIdx),
+        name: decodeURIComponent(urlWithName.slice(hashIdx + 1)),
+    };
+}
 
 interface Props {
     open: boolean;
@@ -70,9 +90,10 @@ interface Props {
     workspaceId: number;
     boardId: number;
     card: Card | null;
+    readOnly?: boolean;
 }
 
-export default function CardDetailModal({ open, onClose, workspaceId, boardId, card }: Props) {
+export default function CardDetailModal({ open, onClose, workspaceId, boardId, card, readOnly = false }: Props) {
     const cardId = card?.id;
     const listId = card?.listId;
 
@@ -107,6 +128,13 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
     const [unassignUser] = useUnassignUserMutation();
     const [createComment, { isLoading: postingComment }] = useCreateCommentMutation();
     const [deleteComment] = useDeleteCommentMutation();
+    const [updateComment] = useUpdateCommentMutation();
+    const [uploadCover, { isLoading: uploadingCover }] = useUploadCoverImageMutation();
+    const [uploadAttachment, { isLoading: uploadingAttachment }] = useUploadAttachmentMutation();
+    const [deleteAttachment] = useDeleteAttachmentMutation();
+
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    const attachmentInputRef = useRef<HTMLInputElement>(null);
 
     const [editingTitle, setEditingTitle] = useState(false);
     const [titleValue, setTitleValue] = useState("");
@@ -116,7 +144,8 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
     const [labelInput, setLabelInput] = useState("");
     const [tagInput, setTagInput] = useState("");
     const [commentInput, setCommentInput] = useState("");
-    const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+    const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+    const [editingCommentText, setEditingCommentText] = useState("");
 
     useEffect(() => {
         if (fullCard) {
@@ -253,22 +282,25 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
         }
     };
 
-    const handleAssign = async (userId: number) => {
+    const handleAssigneesChange = async (ids: string[]) => {
+        const currentIds = (fullCard.assignees ?? []).map((a) => String(a.userId));
+        const prev = new Set(currentIds);
+        const next = new Set(ids);
         try {
-            await assignUser({
-                workspaceId, boardId, listId, cardId: fullCard.id, userId,
-            }).unwrap();
-            setShowAssigneePicker(false);
-        } catch (err) {
-            toast.error(parseApiError(err));
-        }
-    };
-
-    const handleUnassign = async (userId: number) => {
-        try {
-            await unassignUser({
-                workspaceId, boardId, listId, cardId: fullCard.id, userId,
-            }).unwrap();
+            for (const id of ids) {
+                if (!prev.has(id)) {
+                    await assignUser({
+                        workspaceId, boardId, listId, cardId: fullCard.id, userId: Number(id),
+                    }).unwrap();
+                }
+            }
+            for (const id of currentIds) {
+                if (!next.has(id)) {
+                    await unassignUser({
+                        workspaceId, boardId, listId, cardId: fullCard.id, userId: Number(id),
+                    }).unwrap();
+                }
+            }
         } catch (err) {
             toast.error(parseApiError(err));
         }
@@ -293,6 +325,78 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
             await deleteComment({
                 workspaceId, boardId, cardId: fullCard.id, commentId,
             }).unwrap();
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const handleStartEditComment = (commentId: number, content: string) => {
+        setEditingCommentId(commentId);
+        setEditingCommentText(content);
+    };
+
+    const handleSaveComment = async () => {
+        if (!editingCommentId) return;
+        const content = editingCommentText.trim();
+        if (!content) return;
+        try {
+            await updateComment({
+                workspaceId, boardId, cardId: fullCard.id,
+                commentId: editingCommentId, content,
+            }).unwrap();
+            setEditingCommentId(null);
+            setEditingCommentText("");
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Image must be under 5 MB");
+            return;
+        }
+        const formData = new FormData();
+        formData.append("cover", file);
+        try {
+            await uploadCover({
+                workspaceId, boardId, listId, cardId: fullCard.id, file: formData,
+            }).unwrap();
+            toast.success("Cover updated");
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+        e.target.value = "";
+    };
+
+    const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("File must be under 10 MB");
+            return;
+        }
+        const formData = new FormData();
+        formData.append("attachment", file);
+        try {
+            await uploadAttachment({
+                workspaceId, boardId, listId, cardId: fullCard.id, file: formData,
+            }).unwrap();
+            toast.success("Attachment uploaded");
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+        e.target.value = "";
+    };
+
+    const handleDeleteAttachment = async (index: number) => {
+        try {
+            await deleteAttachment({
+                workspaceId, boardId, listId, cardId: fullCard.id, index,
+            }).unwrap();
+            toast.success("Attachment removed");
         } catch (err) {
             toast.error(parseApiError(err));
         }
@@ -329,8 +433,11 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
         ? Math.round((completedCount / checklist.length) * 100)
         : 0;
 
-    const assignedUserIds = new Set((fullCard.assignees ?? []).map((a) => a.userId));
-    const availableMembers = boardMembers.filter((m) => !assignedUserIds.has(m.userId));
+    const memberOptions = boardMembers.map((m) => ({
+        value: String(m.userId),
+        label: m.user.name,
+    }));
+    const assigneeIds = (fullCard.assignees ?? []).map((a) => String(a.userId));
 
     return createPortal(
         <div
@@ -345,12 +452,59 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
 
             <div className="relative w-full sm:max-w-3xl bg-slate-50 rounded-none sm:rounded-2xl shadow-2xl my-0 sm:my-8 min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto">
                 {/* Cover image */}
-                {fullCard.coverImage && (
-                    <div
-                        className="h-32 sm:h-40 bg-cover bg-center rounded-t-none sm:rounded-t-2xl"
-                        style={{ backgroundImage: `url(${fullCard.coverImage})` }}
-                    />
-                )}
+                {fullCard.coverImage ? (
+                    <div className="relative group">
+                        <div
+                            className="h-32 sm:h-40 bg-cover bg-center rounded-t-none sm:rounded-t-2xl"
+                            style={{ backgroundImage: `url(${fullCard.coverImage})` }}
+                        />
+                        {!readOnly && (
+                            <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => coverInputRef.current?.click()}
+                                    className="text-xs bg-black/50 hover:bg-black/70 text-white px-2 py-1 rounded"
+                                >
+                                    Change
+                                </button>
+                                <button
+                                    onClick={() => updateField({ coverImage: null })}
+                                    className="text-xs bg-black/50 hover:bg-black/70 text-white px-2 py-1 rounded"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ) : !readOnly ? (
+                    <button
+                        onClick={() => coverInputRef.current?.click()}
+                        disabled={uploadingCover}
+                        className="w-full h-16 sm:h-20 flex items-center justify-center gap-2 text-slate-500 hover:bg-slate-100 border-b border-slate-200 text-sm"
+                    >
+                        {uploadingCover ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <>
+                                <ImagePlus className="h-4 w-4" />
+                                Add cover image
+                            </>
+                        )}
+                    </button>
+                ) : null}
+                <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleCoverUpload}
+                />
+                <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.txt,.doc,.docx"
+                    className="hidden"
+                    onChange={handleAttachmentUpload}
+                />
 
                 <button
                     onClick={onClose}
@@ -368,7 +522,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                     <div className="p-4 sm:p-6">
                         {/* Title */}
                         <div className="mb-1 pr-12">
-                            {editingTitle ? (
+                            {editingTitle && !readOnly ? (
                                 <textarea
                                     autoFocus
                                     value={titleValue}
@@ -389,8 +543,11 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                 />
                             ) : (
                                 <h2
-                                    onClick={() => setEditingTitle(true)}
-                                    className="text-xl font-bold text-slate-900 cursor-pointer hover:bg-slate-100 rounded px-2 py-1 -mx-2"
+                                    onClick={() => !readOnly && setEditingTitle(true)}
+                                    className={cn(
+                                        "text-xl font-bold text-slate-900 rounded px-2 py-1 -mx-2",
+                                        !readOnly && "cursor-pointer hover:bg-slate-100"
+                                    )}
                                 >
                                     {fullCard.title}
                                 </h2>
@@ -399,15 +556,14 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
 
                         {/* Status row */}
                         <div className="flex items-center gap-2 mb-6 flex-wrap text-xs">
-                            <select
+                            <Select
+                                options={STATUS_OPTIONS}
                                 value={fullCard.status}
-                                onChange={(e) => updateField({ status: e.target.value })}
-                                className="text-xs font-medium bg-white border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {STATUSES.map((s) => (
-                                    <option key={s.value} value={s.value}>{s.label}</option>
-                                ))}
-                            </select>
+                                onChange={(status) => updateField({ status })}
+                                disabled={readOnly}
+                                size="sm"
+                                className="w-36"
+                            />
                             <span className="text-slate-400">·</span>
                             <span className="text-slate-500">
                                 Created {format(new Date(fullCard.createdAt), "MMM d, yyyy")}
@@ -456,12 +612,14 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         </div>
                                     ) : (
                                         <div
-                                            onClick={() => setEditingDesc(true)}
+                                            onClick={() => !readOnly && setEditingDesc(true)}
                                             className={cn(
-                                                "rounded-lg px-3 py-3 cursor-pointer transition-colors",
+                                                "rounded-lg px-3 py-3 transition-colors",
+                                                !readOnly && "cursor-pointer",
                                                 fullCard.description
                                                     ? "bg-white border border-slate-200 hover:border-slate-300"
-                                                    : "bg-slate-100 hover:bg-slate-200/70"
+                                                    : "bg-slate-100",
+                                                !readOnly && !fullCard.description && "hover:bg-slate-200/70"
                                             )}
                                         >
                                             {fullCard.description ? (
@@ -492,16 +650,19 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                     )}
                                                 >
                                                     {l}
-                                                    <button
-                                                        onClick={() => handleRemoveLabel(l)}
-                                                        className="hover:bg-black/20 rounded"
-                                                        aria-label={`Remove ${l}`}
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </button>
+                                                    {!readOnly && (
+                                                        <button
+                                                            onClick={() => handleRemoveLabel(l)}
+                                                            className="hover:bg-black/20 rounded"
+                                                            aria-label={`Remove ${l}`}
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    )}
                                                 </span>
                                             ))}
                                         </div>
+                                        {!readOnly && (
                                         <div className="flex items-center gap-1">
                                             <input
                                                 value={labelInput}
@@ -518,6 +679,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                 <Plus className="h-3.5 w-3.5" />
                                             </button>
                                         </div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -532,16 +694,19 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                     className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-1 rounded"
                                                 >
                                                     #{t}
-                                                    <button
-                                                        onClick={() => handleRemoveTag(t)}
-                                                        className="hover:bg-slate-200 rounded"
-                                                        aria-label={`Remove ${t}`}
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </button>
+                                                    {!readOnly && (
+                                                        <button
+                                                            onClick={() => handleRemoveTag(t)}
+                                                            className="hover:bg-slate-200 rounded"
+                                                            aria-label={`Remove ${t}`}
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    )}
                                                 </span>
                                             ))}
                                         </div>
+                                        {!readOnly && (
                                         <div className="flex items-center gap-1">
                                             <input
                                                 value={tagInput}
@@ -558,7 +723,69 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                 <Plus className="h-3.5 w-3.5" />
                                             </button>
                                         </div>
+                                        )}
                                     </div>
+                                </section>
+
+                                {/* Attachments */}
+                                <section>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <Paperclip className="h-4 w-4 text-slate-500" />
+                                            <h3 className="text-sm font-semibold text-slate-700">Attachments</h3>
+                                        </div>
+                                        {!readOnly && (
+                                            <button
+                                                onClick={() => attachmentInputRef.current?.click()}
+                                                disabled={uploadingAttachment}
+                                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                                            >
+                                                {uploadingAttachment ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <Plus className="h-3 w-3" />
+                                                )}
+                                                Add
+                                            </button>
+                                        )}
+                                    </div>
+                                    {(fullCard.attachments ?? []).length === 0 ? (
+                                        <p className="text-xs text-slate-400">No attachments</p>
+                                    ) : (
+                                        <div className="space-y-1.5">
+                                            {(fullCard.attachments ?? []).map((raw, idx) => {
+                                                const { url, name } = parseAttachment(raw);
+                                                return (
+                                                    <div
+                                                        key={`${url}-${idx}`}
+                                                        className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2"
+                                                    >
+                                                        <Paperclip className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                        <a
+                                                            href={url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-sm text-blue-600 hover:underline truncate flex-1"
+                                                        >
+                                                            {name}
+                                                        </a>
+                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-600">
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                        </a>
+                                                        {!readOnly && (
+                                                            <button
+                                                                onClick={() => handleDeleteAttachment(idx)}
+                                                                className="text-slate-400 hover:text-red-500"
+                                                                aria-label="Remove attachment"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </section>
 
                                 {/* Checklist */}
@@ -593,7 +820,8 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                 className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-100 group"
                                             >
                                                 <button
-                                                    onClick={() => handleToggleChecklistItem(item.id, !item.completed)}
+                                                    onClick={() => !readOnly && handleToggleChecklistItem(item.id, !item.completed)}
+                                                    disabled={readOnly}
                                                     className={cn(
                                                         "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                                                         item.completed
@@ -609,18 +837,20 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                 )}>
                                                     {item.text}
                                                 </span>
-                                                <button
-                                                    onClick={() => handleDeleteChecklistItem(item.id)}
-                                                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
-                                                    aria-label="Delete item"
-                                                >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </button>
+                                                {!readOnly && (
+                                                    <button
+                                                        onClick={() => handleDeleteChecklistItem(item.id)}
+                                                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                                                        aria-label="Delete item"
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div className="flex items-center gap-2 mt-2">
+                                    {!readOnly && <div className="flex items-center gap-2 mt-2">
                                         <input
                                             value={newChecklistItem}
                                             onChange={(e) => setNewChecklistItem(e.target.value)}
@@ -631,7 +861,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         <Button size="sm" onClick={handleAddChecklist} disabled={!newChecklistItem.trim()}>
                                             Add
                                         </Button>
-                                    </div>
+                                    </div>}
                                 </section>
 
                                 {/* Comments */}
@@ -644,7 +874,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                     </div>
 
                                     {/* Add comment */}
-                                    <div className="flex items-start gap-2 mb-4">
+                                    {!readOnly && <div className="flex items-start gap-2 mb-4">
                                         {me && (
                                             <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
                                                 {me.name[0].toUpperCase()}
@@ -680,7 +910,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
+                                    </div>}
 
                                     {/* Comments list */}
                                     <div className="space-y-3">
@@ -707,15 +937,43 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                                                     <span className="text-[10px] text-slate-400">(edited)</span>
                                                                 )}
                                                             </div>
-                                                            <p className={cn(
-                                                                "text-sm whitespace-pre-wrap break-words",
-                                                                c.isDeleted ? "text-slate-400 italic" : "text-slate-700"
-                                                            )}>
-                                                                {c.content}
-                                                            </p>
+                                                            {editingCommentId === c.id ? (
+                                                                <div className="space-y-2">
+                                                                    <textarea
+                                                                        autoFocus
+                                                                        value={editingCommentText}
+                                                                        onChange={(e) => setEditingCommentText(e.target.value)}
+                                                                        rows={3}
+                                                                        className="w-full text-sm text-slate-800 bg-white border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                                                    />
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Button size="sm" onClick={handleSaveComment}>Save</Button>
+                                                                        <button
+                                                                            onClick={() => { setEditingCommentId(null); setEditingCommentText(""); }}
+                                                                            className="text-xs text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className={cn(
+                                                                    "text-sm whitespace-pre-wrap break-words",
+                                                                    c.isDeleted ? "text-slate-400 italic" : "text-slate-700"
+                                                                )}>
+                                                                    {c.content}
+                                                                </p>
+                                                            )}
                                                         </div>
-                                                        {isMine && !c.isDeleted && (
+                                                        {isMine && !c.isDeleted && editingCommentId !== c.id && (
                                                             <div className="flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={() => handleStartEditComment(c.id, c.content)}
+                                                                    className="text-[10px] text-slate-500 hover:underline flex items-center gap-0.5"
+                                                                >
+                                                                    <Edit2 className="h-3 w-3" />
+                                                                    Edit
+                                                                </button>
                                                                 <button
                                                                     onClick={() => handleDeleteComment(c.id)}
                                                                     className="text-[10px] text-red-500 hover:underline"
@@ -740,23 +998,13 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         <Flag className="h-3 w-3" />
                                         Priority
                                     </p>
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                        {PRIORITIES.map((p) => (
-                                            <button
-                                                key={p.value}
-                                                onClick={() => updateField({ priority: p.value })}
-                                                className={cn(
-                                                    "text-xs font-semibold uppercase px-2 py-1.5 rounded border transition-all",
-                                                    p.color,
-                                                    fullCard.priority === p.value
-                                                        ? "ring-2 ring-offset-1 ring-blue-500"
-                                                        : "opacity-60 hover:opacity-100"
-                                                )}
-                                            >
-                                                {p.label}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <Select
+                                        options={PRIORITY_OPTIONS}
+                                        value={fullCard.priority}
+                                        onChange={(priority) => updateField({ priority })}
+                                        disabled={readOnly}
+                                        size="sm"
+                                    />
                                 </div>
 
                                 {/* Due date */}
@@ -769,9 +1017,10 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         type="date"
                                         value={fullCard.dueDate ? fullCard.dueDate.split("T")[0] : ""}
                                         onChange={(e) => updateField({ dueDate: e.target.value || null })}
-                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        disabled={readOnly}
+                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
                                     />
-                                    {fullCard.dueDate && (
+                                    {fullCard.dueDate && !readOnly && (
                                         <button
                                             onClick={() => updateField({ dueDate: null })}
                                             className="text-xs text-slate-400 hover:text-red-500 mt-1"
@@ -787,71 +1036,22 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         <UserIcon className="h-3 w-3" />
                                         Members
                                     </p>
-                                    <div className="space-y-1 mb-2">
-                                        {(fullCard.assignees ?? []).map((a) => (
-                                            <div
-                                                key={a.id}
-                                                className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 group"
-                                            >
-                                                <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-[10px] font-bold shrink-0">
-                                                    {a.user.name[0].toUpperCase()}
-                                                </div>
-                                                <span className="text-xs text-slate-700 truncate flex-1">
-                                                    {a.user.name}
-                                                </span>
-                                                <button
-                                                    onClick={() => handleUnassign(a.userId)}
-                                                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
-                                                    aria-label="Unassign"
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {showAssigneePicker ? (
-                                        <div className="bg-white border border-slate-200 rounded-lg p-1.5 max-h-40 overflow-y-auto space-y-0.5">
-                                            {availableMembers.length === 0 ? (
-                                                <p className="text-xs text-slate-400 italic p-2">
-                                                    All board members are already assigned.
-                                                </p>
-                                            ) : (
-                                                availableMembers.map((m) => (
-                                                    <button
-                                                        key={m.id}
-                                                        onClick={() => handleAssign(m.userId)}
-                                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-left"
-                                                    >
-                                                        <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-[10px] font-bold shrink-0">
-                                                            {m.user.name[0].toUpperCase()}
-                                                        </div>
-                                                        <span className="text-xs text-slate-700 truncate">
-                                                            {m.user.name}
-                                                        </span>
-                                                    </button>
-                                                ))
-                                            )}
-                                            <button
-                                                onClick={() => setShowAssigneePicker(false)}
-                                                className="w-full text-xs text-slate-400 hover:text-slate-600 py-1 mt-1 border-t border-slate-100"
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => setShowAssigneePicker(true)}
-                                            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg border border-dashed border-slate-300"
-                                        >
-                                            <Plus className="h-3 w-3" />
-                                            Add member
-                                        </button>
-                                    )}
+                                    <Select
+                                        mode="multiple"
+                                        options={memberOptions}
+                                        value={assigneeIds}
+                                        onChange={handleAssigneesChange}
+                                        disabled={readOnly}
+                                        placeholder="Assign members…"
+                                        searchable
+                                        size="sm"
+                                        emptyMessage="No board members"
+                                        maxTags={3}
+                                    />
                                 </div>
 
                                 {/* Actions */}
-                                <div className="pt-4 border-t border-slate-200 space-y-1.5">
+                                {!readOnly && <div className="pt-4 border-t border-slate-200 space-y-1.5">
                                     <button
                                         onClick={handleArchive}
                                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-700 bg-white border border-slate-200 hover:bg-slate-50"
@@ -871,7 +1071,7 @@ export default function CardDetailModal({ open, onClose, workspaceId, boardId, c
                                         )}
                                         Delete
                                     </button>
-                                </div>
+                                </div>}
                             </div>
                         </div>
                     </div>

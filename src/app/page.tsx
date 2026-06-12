@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -12,14 +11,10 @@ import {
   Shield,
   ChevronRight,
 } from "lucide-react";
-import { token } from "@/utils/token";
+import { useAuthToken } from "@/hooks/useAuthToken";
 
 export default function HomePage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    setIsLoggedIn(!!token.getAccess());
-  }, []);
+  const isLoggedIn = useAuthToken();
 
   return (
     <div className="min-h-screen bg-white flex flex-col">

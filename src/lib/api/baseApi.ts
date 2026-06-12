@@ -1,7 +1,9 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { token } from "@/utils/token";
-import { logout } from "@/store/slices/authSlice";
+import { clearAuthSession, isLoggingOut } from "@/store/authSession";
+import type { AppDispatch, RootState } from "@/lib/store";
+import { redirectToLogin, isAuthPage } from "@/utils/authRedirect";
 
 const rawBaseQuery = fetchBaseQuery({
     baseUrl: process.env.NEXT_PUBLIC_API_URL,
@@ -15,6 +17,32 @@ const rawBaseQuery = fetchBaseQuery({
 // Module-scoped mutex so concurrent 401s share one refresh attempt
 let refreshPromise: Promise<boolean> | null = null;
 
+const AUTH_ENDPOINTS_SKIP_REFRESH = new Set([
+    "/auth/refresh",
+    "/auth/login",
+    "/auth/register",
+    "/auth/logout",
+]);
+
+function getRequestUrl(args: string | FetchArgs): string {
+    return typeof args === "string" ? args : args.url;
+}
+
+function shouldAttemptRefresh(state: RootState): boolean {
+    if (isLoggingOut()) return false;
+    if (!state.auth.isAuthenticated) return false;
+    if (!token.getRefresh()) return false;
+    return true;
+}
+
+function handleSessionExpired(dispatch: AppDispatch): void {
+    if (isLoggingOut()) return;
+    if (typeof window !== "undefined" && isAuthPage(window.location.pathname)) return;
+
+    clearAuthSession(dispatch, { resetApi: false });
+    redirectToLogin();
+}
+
 async function performRefresh(
     api: Parameters<BaseQueryFn>[1],
     extraOptions: Parameters<BaseQueryFn>[2]
@@ -24,7 +52,7 @@ async function performRefresh(
     refreshPromise = (async () => {
         try {
             const refreshToken = token.getRefresh();
-            if (!refreshToken) return false;
+            if (!refreshToken || isLoggingOut()) return false;
 
             const result = await rawBaseQuery(
                 { url: "/auth/refresh", method: "POST", body: { refreshToken } },
@@ -32,7 +60,6 @@ async function performRefresh(
                 extraOptions
             );
 
-            // API envelope: { success, message, data: { accessToken, refreshToken } }
             const body = result.data as
                 | { success?: boolean; data?: { accessToken: string; refreshToken: string } }
                 | undefined;
@@ -46,7 +73,6 @@ async function performRefresh(
         } catch {
             return false;
         } finally {
-            // Allow next refresh after a tick so awaiting callers see the result
             setTimeout(() => { refreshPromise = null; }, 0);
         }
     })();
@@ -63,26 +89,27 @@ const baseQueryWithReauth: BaseQueryFn<
 
     if (result.error?.status !== 401) return result;
 
-    // Never try to refresh the refresh endpoint itself (avoids loops)
-    const url = typeof args === "string" ? args : args.url;
-    if (url === "/auth/refresh" || url === "/auth/login" || url === "/auth/register") {
+    const url = getRequestUrl(args);
+    if (AUTH_ENDPOINTS_SKIP_REFRESH.has(url)) return result;
+
+    const state = api.getState() as RootState;
+
+    // Intentional sign-out or already cleared session — do not refresh or redirect.
+    if (isLoggingOut() || !shouldAttemptRefresh(state)) {
         return result;
     }
 
     const refreshed = await performRefresh(api, extraOptions);
 
-    if (refreshed) {
-        // Retry the original request with the new access token
+    if (refreshed && !isLoggingOut()) {
         result = await rawBaseQuery(args, api, extraOptions);
-    } else {
-        token.clearAll();
-        api.dispatch(logout());
-        // Force navigation to login if we're in a browser session
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-            window.location.assign("/login");
+        if (result.error?.status === 401) {
+            handleSessionExpired(api.dispatch as AppDispatch);
         }
+        return result;
     }
 
+    handleSessionExpired(api.dispatch as AppDispatch);
     return result;
 };
 
@@ -102,6 +129,11 @@ export const baseApi = createApi({
         "Todo",
         "AdminUsers",
         "AdminStats",
+        "AdminWorkspaces",
+        "AdminBoards",
+        "AdminCards",
+        "AdminComments",
+        "AdminErrorLogs",
     ],
     endpoints: () => ({}),
 });

@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
     DndContext,
     DragOverlay,
@@ -42,11 +42,16 @@ import Link from "next/link";
 
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui";
+import RoleBadge from "@/components/roles/RoleBadge";
+import ViewOnlyBanner from "@/components/roles/ViewOnlyBanner";
+import AdminReturnBanner from "@/components/admin/AdminReturnBanner";
 import ListColumn from "@/components/board/ListColumn";
 import { CardContent } from "@/components/board/CardItem";
 import CardDetailModal from "@/components/board/CardDetailModal";
 import BoardSettingsModal from "@/components/board/BoardSettingsModal";
 import BoardMembersModal from "@/components/board/BoardMembersModal";
+import BoardSearchBar from "@/components/board/BoardSearchBar";
+import ArchivedItemsPanel from "@/components/board/ArchivedItemsPanel";
 import {
     useGetBoardDetailQuery,
     useUpdateBoardMutation,
@@ -66,6 +71,8 @@ import {
 import type { Card } from "@/types/card.types";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
+import { useBoardSocket } from "@/lib/socket/useBoardSocket";
+import { useBoardPermissions } from "@/hooks/usePermissions";
 
 interface LocalList {
     id: number;
@@ -82,8 +89,11 @@ const BOARD_FALLBACK_COLORS = [
 export default function BoardDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const workspaceId = Number(params.id);
     const boardId = Number(params.boardId);
+
+    useBoardSocket(boardId);
 
     const { data: boardData, isLoading: boardLoading } = useGetBoardDetailQuery({ workspaceId, boardId });
     const { data: listsData, isLoading: listsLoading } = useGetListsQuery({ workspaceId, boardId });
@@ -96,22 +106,25 @@ export default function BoardDetailPage() {
     const [moveCard] = useMoveCardMutation();
     const [reorderCards] = useReorderCardsMutation();
 
+    const fromAdmin = searchParams.get("from") === "admin";
     const board = boardData?.data;
     const serverLists = listsData?.data;
     const workspace = wsData?.data;
     const currentUser = profileData?.data;
     const boardMembers = boardMembersData?.data ?? [];
 
-    // Permissions
-    const wsRole = workspace?.myRole;
     const myBoardRole = boardMembers.find((m) => m.userId === currentUser?.id)?.role;
-    const isWorkspaceOwnerOrAdmin = wsRole === "owner" || wsRole === "admin";
-    const isBoardAdmin = myBoardRole === "admin";
-    const canManageBoard = isBoardAdmin || isWorkspaceOwnerOrAdmin;
-    const canDeleteBoard = isBoardAdmin || wsRole === "owner";
+    const {
+        canEditBoard,
+        canManageBoard,
+        canDeleteBoard,
+        isViewOnly,
+        effectiveBoardRole,
+    } = useBoardPermissions(workspace?.myRole, myBoardRole);
 
     // Local state for drag and drop
     const [localLists, setLocalLists] = useState<LocalList[]>([]);
+    const listsSnapshotRef = useRef<LocalList[] | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
     const [activeDragData, setActiveDragData] = useState<{
         type: "card" | "list";
@@ -144,10 +157,52 @@ export default function BoardDetailPage() {
     // Card detail modal
     const [detailCard, setDetailCard] = useState<Card | null>(null);
 
+    const openedCardParamRef = useRef<string | null>(null);
+
+    // Open card from ?card= query param (notification deep links) — run once per param
+    useEffect(() => {
+        const cardParam = searchParams.get("card");
+        if (!cardParam || localLists.length === 0) return;
+        if (openedCardParamRef.current === cardParam) return;
+
+        const cardId = Number(cardParam);
+        if (Number.isNaN(cardId)) return;
+
+        for (const list of localLists) {
+            const found = list.cards.find((c) => c.id === cardId);
+            if (found) {
+                openedCardParamRef.current = cardParam;
+                setDetailCard(found);
+                return;
+            }
+        }
+    }, [searchParams, localLists]);
+
+    const rollbackLists = useCallback(() => {
+        if (listsSnapshotRef.current) {
+            setLocalLists(listsSnapshotRef.current);
+            listsSnapshotRef.current = null;
+        }
+    }, []);
+
+    const persistWithRollback = useCallback(
+        async (promise: Promise<unknown>) => {
+            try {
+                await promise;
+                listsSnapshotRef.current = null;
+            } catch (err) {
+                rollbackLists();
+                toast.error(parseApiError(err));
+            }
+        },
+        [rollbackLists]
+    );
+
     // Board settings & members modals
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+    const [archivedOpen, setArchivedOpen] = useState(false);
 
     const bgColor = board?.background ?? BOARD_FALLBACK_COLORS[boardId % BOARD_FALLBACK_COLORS.length];
 
@@ -188,6 +243,11 @@ export default function BoardDetailPage() {
     };
 
     const handleDragStart = (event: DragStartEvent) => {
+        if (!canEditBoard) return;
+        listsSnapshotRef.current = localLists.map((l) => ({
+            ...l,
+            cards: [...l.cards],
+        }));
         const id = String(event.active.id);
         setActiveId(id);
         const parsed = parseDragId(id);
@@ -205,6 +265,7 @@ export default function BoardDetailPage() {
     };
 
     const handleDragOver = (event: DragOverEvent) => {
+        if (!canEditBoard) return;
         const { active, over } = event;
         if (!over) return;
         const activeId = String(active.id);
@@ -262,7 +323,14 @@ export default function BoardDetailPage() {
         setActiveId(null);
         setActiveDragData(null);
 
-        if (!over) return;
+        if (!canEditBoard) {
+            listsSnapshotRef.current = null;
+            return;
+        }
+        if (!over) {
+            rollbackLists();
+            return;
+        }
         const activeId = String(active.id);
         const overId = String(over.id);
 
@@ -279,12 +347,12 @@ export default function BoardDetailPage() {
 
             const newLists = arrayMove(localLists, oldIndex, newIndex);
             setLocalLists(newLists);
-            reorderLists({
-                workspaceId, boardId,
-                orderedIds: newLists.map((l) => l.id),
-            }).unwrap().catch((err) => {
-                toast.error(parseApiError(err));
-            });
+            persistWithRollback(
+                reorderLists({
+                    workspaceId, boardId,
+                    orderedIds: newLists.map((l) => l.id),
+                }).unwrap()
+            );
             return;
         }
 
@@ -312,12 +380,12 @@ export default function BoardDetailPage() {
                             l.id === currentList.id ? { ...l, cards: newCards } : l
                         )
                     );
-                    reorderCards({
-                        workspaceId, boardId, listId: currentList.id,
-                        orderedIds: newCards.map((c) => c.id),
-                    }).unwrap().catch((err) => {
-                        toast.error(parseApiError(err));
-                    });
+                    persistWithRollback(
+                        reorderCards({
+                            workspaceId, boardId, listId: currentList.id,
+                            orderedIds: newCards.map((c) => c.id),
+                        }).unwrap()
+                    );
                     return;
                 }
             }
@@ -325,17 +393,17 @@ export default function BoardDetailPage() {
             // Cross-list move: call moveCard API
             if (currentList.id !== originalListId) {
                 const newIndex = currentList.cards.findIndex((c) => c.id === activeCardId);
-                moveCard({
-                    workspaceId, boardId,
-                    listId: originalListId,
-                    cardId: activeCardId,
-                    body: {
-                        targetListId: currentList.id,
-                        position: newIndex,
-                    },
-                }).unwrap().catch((err) => {
-                    toast.error(parseApiError(err));
-                });
+                persistWithRollback(
+                    moveCard({
+                        workspaceId, boardId,
+                        listId: originalListId,
+                        cardId: activeCardId,
+                        body: {
+                            targetListId: currentList.id,
+                            position: newIndex,
+                        },
+                    }).unwrap()
+                );
                 return;
             }
 
@@ -349,12 +417,12 @@ export default function BoardDetailPage() {
                         l.id === currentList.id ? { ...l, cards: newCards } : l
                     )
                 );
-                reorderCards({
-                    workspaceId, boardId, listId: currentList.id,
-                    orderedIds: newCards.map((c) => c.id),
-                }).unwrap().catch((err) => {
-                    toast.error(parseApiError(err));
-                });
+                persistWithRollback(
+                    reorderCards({
+                        workspaceId, boardId, listId: currentList.id,
+                        orderedIds: newCards.map((c) => c.id),
+                    }).unwrap()
+                );
             }
         }
     };
@@ -426,6 +494,14 @@ export default function BoardDetailPage() {
             className="h-full flex flex-col overflow-hidden"
             style={{ backgroundColor: bgColor }}
         >
+            {fromAdmin && <AdminReturnBanner href="/admin/boards" />}
+            {isViewOnly && (
+                <ViewOnlyBanner
+                    variant="dark"
+                    message="View-only mode — you can browse cards but cannot make changes."
+                />
+            )}
+
             {/* Board toolbar */}
             <div className="relative z-30 shrink-0 h-12 bg-black/25 backdrop-blur-sm flex items-center justify-between px-2 sm:px-4 gap-2">
                 <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
@@ -452,18 +528,30 @@ export default function BoardDetailPage() {
                         </div>
                     )}
 
-                    <button
-                        onClick={handleToggleStar}
-                        className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 transition-colors shrink-0"
-                        title={board.isStarred ? "Unstar" : "Star this board"}
-                    >
-                        <Star
-                            className={cn(
-                                "h-4 w-4",
-                                board.isStarred ? "fill-amber-300 text-amber-300" : "text-white/70"
-                            )}
-                        />
-                    </button>
+                    {canEditBoard && (
+                        <button
+                            onClick={handleToggleStar}
+                            className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 transition-colors shrink-0"
+                            title={board.isStarred ? "Unstar" : "Star this board"}
+                        >
+                            <Star
+                                className={cn(
+                                    "h-4 w-4",
+                                    board.isStarred ? "fill-amber-300 text-amber-300" : "text-white/70"
+                                )}
+                            />
+                        </button>
+                    )}
+
+                    {effectiveBoardRole && (
+                        <div className="hidden lg:block shrink-0">
+                            <RoleBadge
+                                role={effectiveBoardRole}
+                                scope="board"
+                                className="!bg-white/20 !text-white/90 border border-white/20"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -486,6 +574,12 @@ export default function BoardDetailPage() {
                             )}
                         </div>
                     )}
+
+                    <BoardSearchBar
+                        workspaceId={workspaceId}
+                        boardId={boardId}
+                        onSelectCard={setDetailCard}
+                    />
 
                     <button
                         onClick={() => setMembersOpen(true)}
@@ -528,15 +622,24 @@ export default function BoardDetailPage() {
                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                                     >
                                         <Users className="h-3.5 w-3.5" />
-                                        Manage members
+                                        {canManageBoard ? "Manage members" : "View members"}
                                     </button>
                                     <button
-                                        onClick={handleToggleStar}
+                                        onClick={() => { setArchivedOpen(true); setMoreMenuOpen(false); }}
                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                                     >
-                                        <Star className={cn("h-3.5 w-3.5", board?.isStarred && "fill-amber-400 text-amber-400")} />
-                                        {board?.isStarred ? "Remove from starred" : "Add to starred"}
+                                        <Archive className="h-3.5 w-3.5" />
+                                        Archived items
                                     </button>
+                                    {canEditBoard && (
+                                        <button
+                                            onClick={handleToggleStar}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                        >
+                                            <Star className={cn("h-3.5 w-3.5", board?.isStarred && "fill-amber-400 text-amber-400")} />
+                                            {board?.isStarred ? "Remove from starred" : "Add to starred"}
+                                        </button>
+                                    )}
                                     {canManageBoard && (
                                         <>
                                             <div className="my-1 border-t border-slate-100" />
@@ -588,12 +691,13 @@ export default function BoardDetailPage() {
                                             workspaceId={workspaceId}
                                             boardId={boardId}
                                             onCardClick={setDetailCard}
+                                            readOnly={!canEditBoard}
                                         />
                                     ))}
                                 </SortableContext>
 
                                 {/* Add list */}
-                                {addingList ? (
+                                {canEditBoard && (addingList ? (
                                     <div className="w-72 shrink-0 bg-slate-100/95 backdrop-blur-sm rounded-xl p-2 space-y-2">
                                         <input
                                             autoFocus
@@ -635,7 +739,7 @@ export default function BoardDetailPage() {
                                         <Plus className="h-4 w-4" />
                                         Add another list
                                     </button>
-                                )}
+                                ))}
                             </>
                         )}
                     </div>
@@ -668,6 +772,7 @@ export default function BoardDetailPage() {
                 workspaceId={workspaceId}
                 boardId={boardId}
                 card={detailCard}
+                readOnly={!canEditBoard}
             />
 
             {/* Board settings modal */}
@@ -689,6 +794,14 @@ export default function BoardDetailPage() {
                 boardId={boardId}
                 canManage={canManageBoard}
                 currentUserId={currentUser?.id}
+            />
+
+            <ArchivedItemsPanel
+                open={archivedOpen}
+                onClose={() => setArchivedOpen(false)}
+                workspaceId={workspaceId}
+                boardId={boardId}
+                canRestore={canEditBoard}
             />
         </div>
     );

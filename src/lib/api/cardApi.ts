@@ -103,7 +103,11 @@ export const cardApi = baseApi.injectEndpoints({
                 url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}/restore`,
                 method: "POST",
             }),
-            invalidatesTags: (_r, _e, { listId }) => [{ type: "Card", id: `list-${listId}` }],
+            invalidatesTags: (_r, _e, { listId, boardId }) => [
+                { type: "Card", id: `list-${listId}` },
+                { type: "Card", id: `archived-${boardId}` },
+                { type: "List", id: boardId },
+            ],
         }),
 
         assignUser: build.mutation<ApiResponse<any>, { workspaceId: number; boardId: number; listId: number; cardId: number; userId: number }>({
@@ -178,6 +182,29 @@ export const cardApi = baseApi.injectEndpoints({
             invalidatesTags: ["Card"],
         }),
 
+        getArchivedCards: build.query<ApiResponse<Card[]>, { workspaceId: number; boardId: number }>({
+            query: ({ workspaceId, boardId }) =>
+                `/workspaces/${workspaceId}/boards/${boardId}/cards/archived`,
+            providesTags: (_r, _e, { boardId }) => [{ type: "Card", id: `archived-${boardId}` }],
+        }),
+
+        uploadAttachment: build.mutation<ApiResponse<{ attachments: string[] }>, { workspaceId: number; boardId: number; listId: number; cardId: number; file: FormData }>({
+            query: ({ workspaceId, boardId, listId, cardId, file }) => ({
+                url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}/attachments`,
+                method: "POST",
+                body: file,
+            }),
+            invalidatesTags: (_r, _e, { cardId }) => [{ type: "Card", id: cardId }],
+        }),
+
+        deleteAttachment: build.mutation<ApiResponse<{ attachments: string[] }>, { workspaceId: number; boardId: number; listId: number; cardId: number; index: number }>({
+            query: ({ workspaceId, boardId, listId, cardId, index }) => ({
+                url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}/attachments/${index}`,
+                method: "DELETE",
+            }),
+            invalidatesTags: (_r, _e, { cardId }) => [{ type: "Card", id: cardId }],
+        }),
+
     }),
     overrideExisting: false,
 });
@@ -201,4 +228,7 @@ export const {
     useSearchCardsQuery,
     useGetBoardStatsQuery,
     useBulkMoveCardsMutation,
+    useGetArchivedCardsQuery,
+    useUploadAttachmentMutation,
+    useDeleteAttachmentMutation,
 } = cardApi;

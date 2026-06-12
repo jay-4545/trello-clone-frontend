@@ -15,7 +15,6 @@ export const authApi = baseApi.injectEndpoints({
 
         logout: build.mutation<ApiResponse<null>, void>({
             query: () => ({ url: "/auth/logout", method: "POST" }),
-            invalidatesTags: ["Auth"],
         }),
 
         getProfile: build.query<ApiResponse<User>, void>({

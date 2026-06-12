@@ -1,6 +1,13 @@
 import { baseApi } from "./baseApi";
 import type { ApiResponse, PaginationMeta } from "@/types/api.types";
 
+export interface NotificationMetadata {
+    workspaceId?: number;
+    boardId?: number;
+    listId?: number;
+    cardId?: number;
+}
+
 export interface Notification {
     id: number;
     userId: number;
@@ -10,6 +17,7 @@ export interface Notification {
     body: string;
     entityType: string;
     entityId: number;
+    metadata?: NotificationMetadata;
     isRead: boolean;
     readAt: string | null;
     actor?: { id: number; name: string; avatar: string | null };

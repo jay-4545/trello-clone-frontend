@@ -28,9 +28,19 @@ export interface BoardMember {
 export const boardApi = baseApi.injectEndpoints({
     endpoints: (build) => ({
 
-        getBoards: build.query<ApiResponse<Board[]>, number>({
-            query: (workspaceId) => `/workspaces/${workspaceId}/boards`,
-            providesTags: (_r, _e, workspaceId) => [{ type: "Board", id: workspaceId }],
+        getBoards: build.query<ApiResponse<Board[]>, { workspaceId: number; closedOnly?: boolean } | number>({
+            query: (arg) => {
+                const workspaceId = typeof arg === "number" ? arg : arg.workspaceId;
+                const closedOnly = typeof arg === "number" ? undefined : arg.closedOnly;
+                return {
+                    url: `/workspaces/${workspaceId}/boards`,
+                    params: closedOnly ? { closedOnly: "true" } : undefined,
+                };
+            },
+            providesTags: (_r, _e, arg) => {
+                const workspaceId = typeof arg === "number" ? arg : arg.workspaceId;
+                return [{ type: "Board", id: workspaceId }];
+            },
         }),
 
         getBoardDetail: build.query<ApiResponse<Board>, { workspaceId: number; boardId: number }>({

@@ -3,19 +3,35 @@ import { token } from "@/utils/token";
 
 let socket: Socket | null = null;
 
-export function getSocket(): Socket {
+function syncSocketAuth(s: Socket) {
+    s.auth = { token: token.getAccess() };
+}
+
+export function getSocket(): Socket | null {
+    const url = process.env.NEXT_PUBLIC_SOCKET_URL;
+    if (!url) return null;
+
     if (!socket) {
-        socket = io(process.env.NEXT_PUBLIC_SOCKET_URL!, {
+        socket = io(url, {
             auth: { token: token.getAccess() },
             transports: ["websocket", "polling"],
             autoConnect: false,
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 2000,
+        });
+
+        socket.io.on("reconnect_attempt", () => {
+            syncSocketAuth(socket!);
         });
     }
     return socket;
 }
 
-export function connectSocket() {
+export function connectSocket(): Socket | null {
     const s = getSocket();
+    if (!s) return null;
+    syncSocketAuth(s);
     if (!s.connected) s.connect();
     return s;
 }
@@ -26,9 +42,9 @@ export function disconnectSocket() {
 }
 
 export function joinBoard(boardId: number) {
-    getSocket().emit("board:join", { boardId });
+    getSocket()?.emit("board:join", { boardId });
 }
 
 export function leaveBoard(boardId: number) {
-    getSocket().emit("board:leave", { boardId });
+    getSocket()?.emit("board:leave", { boardId });
 }

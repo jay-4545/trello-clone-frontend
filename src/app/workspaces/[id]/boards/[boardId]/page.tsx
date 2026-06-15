@@ -36,12 +36,20 @@ import {
     Pencil,
     Trash2,
     Archive,
+    CheckSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
 import Button from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import RoleBadge from "@/components/roles/RoleBadge";
 import ViewOnlyBanner from "@/components/roles/ViewOnlyBanner";
 import AdminReturnBanner from "@/components/admin/AdminReturnBanner";
@@ -67,12 +75,16 @@ import {
 import {
     useMoveCardMutation,
     useReorderCardsMutation,
+    useGetBoardStatsQuery,
+    useBulkMoveCardsMutation,
 } from "@/lib/api/cardApi";
 import type { Card } from "@/types/card.types";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
 import { useBoardSocket } from "@/lib/socket/useBoardSocket";
 import { useBoardPermissions } from "@/hooks/usePermissions";
+import { getBoardColor } from "@/lib/boardColors";
+import { getBoardTheme } from "@/lib/boardTheme";
 
 interface LocalList {
     id: number;
@@ -80,11 +92,6 @@ interface LocalList {
     position: number;
     cards: Card[];
 }
-
-const BOARD_FALLBACK_COLORS = [
-    "#0079BF", "#4BBC4E", "#FF9F1A", "#EB5A46",
-    "#C377E0", "#FF78CB", "#00C2E0", "#0052CC",
-];
 
 export default function BoardDetailPage() {
     const params = useParams();
@@ -105,6 +112,8 @@ export default function BoardDetailPage() {
     const [reorderLists] = useReorderListsMutation();
     const [moveCard] = useMoveCardMutation();
     const [reorderCards] = useReorderCardsMutation();
+    const [bulkMoveCards, { isLoading: bulkMoving }] = useBulkMoveCardsMutation();
+    const { data: statsData } = useGetBoardStatsQuery({ workspaceId, boardId });
 
     const fromAdmin = searchParams.get("from") === "admin";
     const board = boardData?.data;
@@ -201,10 +210,15 @@ export default function BoardDetailPage() {
     // Board settings & members modals
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
-    const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const [archivedOpen, setArchivedOpen] = useState(false);
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedCardIds, setSelectedCardIds] = useState<Set<number>>(new Set());
+    const [bulkTargetListId, setBulkTargetListId] = useState<number | "">("");
 
-    const bgColor = board?.background ?? BOARD_FALLBACK_COLORS[boardId % BOARD_FALLBACK_COLORS.length];
+    const boardStats = statsData?.data;
+
+    const bgColor = getBoardColor(board?.background, boardId);
+    const boardTheme = getBoardTheme(bgColor);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -243,7 +257,7 @@ export default function BoardDetailPage() {
     };
 
     const handleDragStart = (event: DragStartEvent) => {
-        if (!canEditBoard) return;
+        if (!canEditBoard || selectMode) return;
         listsSnapshotRef.current = localLists.map((l) => ({
             ...l,
             cards: [...l.cards],
@@ -451,6 +465,42 @@ export default function BoardDetailPage() {
         }
     };
 
+    const toggleCardSelect = (cardId: number) => {
+        setSelectedCardIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(cardId)) next.delete(cardId);
+            else next.add(cardId);
+            return next;
+        });
+    };
+
+    const exitSelectMode = () => {
+        setSelectMode(false);
+        setSelectedCardIds(new Set());
+        setBulkTargetListId("");
+    };
+
+    const handleBulkMove = async () => {
+        if (!bulkTargetListId || selectedCardIds.size === 0) return;
+        try {
+            await bulkMoveCards({
+                workspaceId,
+                boardId,
+                body: {
+                    cardIds: [...selectedCardIds],
+                    targetListId: Number(bulkTargetListId),
+                },
+            }).unwrap();
+            toast.success(`Moved ${selectedCardIds.size} card(s)`);
+            exitSelectMode();
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const getStatusCount = (status: string) =>
+        boardStats?.byStatus?.find((s) => s.status === status)?.count ?? 0;
+
     const activeCard = useMemo(() => {
         if (!activeDragData || activeDragData.type !== "card") return null;
         return activeDragData.card ?? null;
@@ -491,7 +541,7 @@ export default function BoardDetailPage() {
 
     return (
         <div
-            className="h-full flex flex-col overflow-hidden"
+            className="flex flex-col min-h-0 h-[calc(100dvh-3.5rem)] lg:h-full overflow-hidden"
             style={{ backgroundColor: bgColor }}
         >
             {fromAdmin && <AdminReturnBanner href="/admin/boards" />}
@@ -503,11 +553,11 @@ export default function BoardDetailPage() {
             )}
 
             {/* Board toolbar */}
-            <div className="relative z-30 shrink-0 h-12 bg-black/25 backdrop-blur-sm flex items-center justify-between px-2 sm:px-4 gap-2">
+            <div className="relative z-30 shrink-0 h-12 bg-black/30 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-2 sm:px-4 gap-2 shadow-sm">
                 <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
                     <Link
                         href={`/workspaces/${workspaceId}`}
-                        className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 text-white/80 hover:text-white transition-colors shrink-0"
+                        className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 text-white/80 hover:text-white transition-colors shrink-0 cursor-pointer"
                         title="Back to workspace"
                     >
                         <ArrowLeft className="h-4 w-4" />
@@ -531,7 +581,7 @@ export default function BoardDetailPage() {
                     {canEditBoard && (
                         <button
                             onClick={handleToggleStar}
-                            className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 transition-colors shrink-0"
+                            className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/20 transition-colors shrink-0 cursor-pointer"
                             title={board.isStarred ? "Unstar" : "Star this board"}
                         >
                             <Star
@@ -541,6 +591,18 @@ export default function BoardDetailPage() {
                                 )}
                             />
                         </button>
+                    )}
+
+                    {boardStats && (
+                        <div className="hidden xl:flex items-center gap-2 ml-2 text-[11px] text-white/80 shrink-0">
+                            <span className="bg-black/20 rounded px-2 py-0.5">{boardStats.total} cards</span>
+                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("open")} open</span>
+                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("in_progress")} active</span>
+                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("done")} done</span>
+                            {boardStats.overdue > 0 && (
+                                <span className="bg-red-500/40 rounded px-2 py-0.5">{boardStats.overdue} overdue</span>
+                            )}
+                        </div>
                     )}
 
                     {effectiveBoardRole && (
@@ -583,81 +645,79 @@ export default function BoardDetailPage() {
 
                     <button
                         onClick={() => setMembersOpen(true)}
-                        className="hidden sm:flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+                        className="hidden sm:flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors cursor-pointer"
                     >
                         <Users className="h-3.5 w-3.5" />
                         {canManageBoard ? "Share" : "Members"}
                     </button>
                     <button
                         onClick={() => setMembersOpen(true)}
-                        className="sm:hidden flex items-center justify-center h-7 w-7 rounded bg-white/20 hover:bg-white/30 text-white transition-colors"
+                        className="sm:hidden flex items-center justify-center h-7 w-7 rounded bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer"
                         aria-label="Members"
                     >
                         <Users className="h-3.5 w-3.5" />
                     </button>
 
-                    <div className="relative">
-                        <button
-                            onClick={() => setMoreMenuOpen((v) => !v)}
-                            className="flex items-center justify-center h-7 w-7 rounded bg-white/20 hover:bg-white/30 text-white transition-colors"
-                            aria-label="More options"
-                        >
-                            <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                        {moreMenuOpen && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setMoreMenuOpen(false)} />
-                                <div className="absolute right-0 top-9 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1 min-w-[200px] animate-in fade-in-0 slide-in-from-top-2 duration-150">
-                                    {canManageBoard && (
-                                        <button
-                                            onClick={() => { setSettingsOpen(true); setMoreMenuOpen(false); }}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                            Edit board
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => { setMembersOpen(true); setMoreMenuOpen(false); }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                    >
-                                        <Users className="h-3.5 w-3.5" />
-                                        {canManageBoard ? "Manage members" : "View members"}
-                                    </button>
-                                    <button
-                                        onClick={() => { setArchivedOpen(true); setMoreMenuOpen(false); }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                    >
-                                        <Archive className="h-3.5 w-3.5" />
-                                        Archived items
-                                    </button>
-                                    {canEditBoard && (
-                                        <button
-                                            onClick={handleToggleStar}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                        >
-                                            <Star className={cn("h-3.5 w-3.5", board?.isStarred && "fill-amber-400 text-amber-400")} />
-                                            {board?.isStarred ? "Remove from starred" : "Add to starred"}
-                                        </button>
-                                    )}
-                                    {canManageBoard && (
-                                        <>
-                                            <div className="my-1 border-t border-slate-100" />
-                                            <button
-                                                onClick={() => { setSettingsOpen(true); setMoreMenuOpen(false); }}
-                                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                            >
-                                                <Settings className="h-3.5 w-3.5" />
-                                                Board settings
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="flex items-center justify-center h-7 w-7 rounded bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer outline-none"
+                                aria-label="More options"
+                            >
+                                <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[200px]">
+                            {canManageBoard && (
+                                <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit board
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => setMembersOpen(true)}>
+                                <Users className="h-3.5 w-3.5" />
+                                {canManageBoard ? "Manage members" : "View members"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setArchivedOpen(true)}>
+                                <Archive className="h-3.5 w-3.5" />
+                                Archived items
+                            </DropdownMenuItem>
+                            {canEditBoard && (
+                                <DropdownMenuItem onSelect={() => setSelectMode(true)}>
+                                    <CheckSquare className="h-3.5 w-3.5" />
+                                    Select cards
+                                </DropdownMenuItem>
+                            )}
+                            {canEditBoard && (
+                                <DropdownMenuItem onSelect={handleToggleStar}>
+                                    <Star className={cn("h-3.5 w-3.5", board?.isStarred && "fill-amber-400 text-amber-400")} />
+                                    {board?.isStarred ? "Remove from starred" : "Add to starred"}
+                                </DropdownMenuItem>
+                            )}
+                            {canManageBoard && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+                                        <Settings className="h-3.5 w-3.5" />
+                                        Board settings
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
+
+            {boardStats && (
+                <div className="xl:hidden shrink-0 flex items-center gap-2 px-3 py-1.5 bg-black/20 text-[11px] text-white/80 overflow-x-auto">
+                    <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.total} cards</span>
+                    {boardStats.overdue > 0 && (
+                        <span className="bg-red-500/40 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.overdue} overdue</span>
+                    )}
+                    <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("done")} done</span>
+                </div>
+            )}
 
             {/* DnD lists area */}
             <DndContext
@@ -667,8 +727,8 @@ export default function BoardDetailPage() {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex-1 overflow-x-auto overflow-y-hidden">
-                    <div className="flex gap-3 p-3 sm:p-4 h-full items-start">
+                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+                    <div className="flex gap-3 p-3 sm:p-4 items-start min-h-0 pb-6">
                         {listsLoading ? (
                             <>
                                 {[1, 2, 3].map((i) => (
@@ -690,15 +750,19 @@ export default function BoardDetailPage() {
                                             list={list}
                                             workspaceId={workspaceId}
                                             boardId={boardId}
+                                            boardColor={bgColor}
                                             onCardClick={setDetailCard}
-                                            readOnly={!canEditBoard}
+                                            readOnly={!canEditBoard || selectMode}
+                                            selectMode={selectMode}
+                                            selectedCardIds={selectedCardIds}
+                                            onToggleCardSelect={toggleCardSelect}
                                         />
                                     ))}
                                 </SortableContext>
 
                                 {/* Add list */}
                                 {canEditBoard && (addingList ? (
-                                    <div className="w-72 shrink-0 bg-slate-100/95 backdrop-blur-sm rounded-xl p-2 space-y-2">
+                                    <div className={cn("w-72 shrink-0 self-start rounded-xl p-2 space-y-2", boardTheme.addListColumn)}>
                                         <input
                                             autoFocus
                                             value={newListName}
@@ -711,20 +775,20 @@ export default function BoardDetailPage() {
                                                 }
                                             }}
                                             placeholder="Enter list title…"
-                                            className="w-full text-sm font-semibold text-slate-900 bg-white border border-blue-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full text-sm font-semibold text-[#172b4d] bg-white border-0 rounded-lg px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                         <div className="flex items-center gap-2">
-                                            <Button
-                                                size="sm"
+                                            <button
+                                                type="button"
                                                 onClick={handleCreateList}
-                                                loading={creatingList}
-                                                disabled={!newListName.trim()}
+                                                disabled={!newListName.trim() || creatingList}
+                                                className="inline-flex items-center text-sm font-medium text-white bg-[#0c66e4] hover:bg-[#0055cc] disabled:opacity-50 rounded-lg px-3 py-1.5 cursor-pointer"
                                             >
-                                                Add list
-                                            </Button>
+                                                {creatingList ? "Adding…" : "Add list"}
+                                            </button>
                                             <button
                                                 onClick={() => { setAddingList(false); setNewListName(""); }}
-                                                className="flex items-center justify-center h-8 w-8 rounded hover:bg-slate-200 text-slate-500 transition-colors"
+                                                className="flex items-center justify-center h-8 w-8 rounded hover:bg-white/15 text-white/70 transition-colors cursor-pointer"
                                                 aria-label="Cancel"
                                             >
                                                 <X className="h-4 w-4" />
@@ -734,7 +798,10 @@ export default function BoardDetailPage() {
                                 ) : (
                                     <button
                                         onClick={() => setAddingList(true)}
-                                        className="w-72 shrink-0 flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-3 text-sm font-medium transition-colors backdrop-blur-sm"
+                                        className={cn(
+                                            "w-72 shrink-0 self-start flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-colors backdrop-blur-sm cursor-pointer",
+                                            boardTheme.addListBtn
+                                        )}
                                     >
                                         <Plus className="h-4 w-4" />
                                         Add another list
@@ -748,16 +815,16 @@ export default function BoardDetailPage() {
                 {/* Drag overlay */}
                 <DragOverlay dropAnimation={null}>
                     {activeCard && (
-                        <div className="bg-white rounded-lg shadow-2xl border border-slate-200 overflow-hidden rotate-3 opacity-95 w-72">
-                            <CardContent card={activeCard} />
+                        <div className={cn("rounded-lg shadow-2xl overflow-hidden rotate-3 opacity-95 w-72", boardTheme.card)}>
+                            <CardContent card={activeCard} theme={boardTheme} />
                         </div>
                     )}
                     {activeList && (
-                        <div className="w-72 bg-slate-100 rounded-xl p-2 shadow-2xl rotate-2 opacity-95">
-                            <div className="text-sm font-semibold text-slate-800 px-2 py-1">
+                        <div className={cn("w-72 rounded-xl p-2 shadow-2xl rotate-2 opacity-95", boardTheme.listColumn)}>
+                            <div className={cn("text-sm font-semibold px-2 py-1", boardTheme.listHeader)}>
                                 {activeList.name}
                             </div>
-                            <div className="text-xs text-slate-500 px-2">
+                            <div className={cn("text-xs px-2", boardTheme.listCount)}>
                                 {activeList.cards.length} cards
                             </div>
                         </div>
@@ -765,14 +832,47 @@ export default function BoardDetailPage() {
                 </DragOverlay>
             </DndContext>
 
+            {selectMode && (
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-3 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl max-w-[95vw] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                    <span className="text-sm font-medium">{selectedCardIds.size} selected</span>
+                    <select
+                        value={bulkTargetListId}
+                        onChange={(e) => setBulkTargetListId(e.target.value ? Number(e.target.value) : "")}
+                        className="text-sm bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-white cursor-pointer"
+                    >
+                        <option value="">Move to list…</option>
+                        {localLists.map((list) => (
+                            <option key={list.id} value={list.id}>{list.name}</option>
+                        ))}
+                    </select>
+                    <Button
+                        size="sm"
+                        loading={bulkMoving}
+                        disabled={!bulkTargetListId || selectedCardIds.size === 0}
+                        onClick={handleBulkMove}
+                    >
+                        Move cards
+                    </Button>
+                    <button
+                        onClick={exitSelectMode}
+                        className="text-sm text-slate-300 hover:text-white px-2 cursor-pointer"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            )}
+
             {/* Card detail modal */}
             <CardDetailModal
                 open={!!detailCard}
                 onClose={() => setDetailCard(null)}
                 workspaceId={workspaceId}
                 boardId={boardId}
+                boardColor={bgColor}
                 card={detailCard}
+                lists={localLists.map((l) => ({ id: l.id, name: l.name }))}
                 readOnly={!canEditBoard}
+                onCardUpdate={(updated) => setDetailCard(updated)}
             />
 
             {/* Board settings modal */}

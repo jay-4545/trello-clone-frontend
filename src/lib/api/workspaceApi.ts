@@ -70,6 +70,19 @@ export const workspaceApi = baseApi.injectEndpoints({
             invalidatesTags: (_r, _e, { workspaceId }) => [{ type: "WorkspaceMember", id: workspaceId }],
         }),
 
+        transferOwnership: build.mutation<ApiResponse<Workspace>, { workspaceId: number; userId: number }>({
+            query: ({ workspaceId, userId }) => ({
+                url: `/workspaces/${workspaceId}/transfer-ownership`,
+                method: "POST",
+                body: { userId },
+            }),
+            invalidatesTags: (_r, _e, { workspaceId }) => [
+                { type: "Workspace", id: workspaceId },
+                { type: "WorkspaceMember", id: workspaceId },
+                "Workspace",
+            ],
+        }),
+
     }),
     overrideExisting: false,
 });
@@ -84,4 +97,5 @@ export const {
     useInviteWorkspaceMemberMutation,
     useUpdateWorkspaceMemberRoleMutation,
     useRemoveWorkspaceMemberMutation,
+    useTransferOwnershipMutation,
 } = workspaceApi;

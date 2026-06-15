@@ -34,6 +34,7 @@ import {
     useLogoutMutation,
     useChangePasswordMutation,
     useUploadAvatarMutation,
+    useSendVerificationEmailMutation,
 } from "@/lib/api/authApi";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
@@ -123,6 +124,7 @@ export default function ProfileSettings({ variant = "app" }: { variant?: Profile
     const [logoutMutation, { isLoading: loggingOut }] = useLogoutMutation();
     const [changePassword, { isLoading: changingPw }] = useChangePasswordMutation();
     const [uploadAvatar, { isLoading: uploadingAvatar }] = useUploadAvatarMutation();
+    const [sendVerificationEmail, { isLoading: sendingVerification }] = useSendVerificationEmailMutation();
 
     const user = profileData?.data;
 
@@ -253,10 +255,27 @@ export default function ProfileSettings({ variant = "app" }: { variant?: Profile
                                         Verified
                                     </span>
                                 ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                                        <AlertCircle className="h-3 w-3" />
-                                        Unverified
-                                    </span>
+                                    <>
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                            <AlertCircle className="h-3 w-3" />
+                                            Unverified
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            loading={sendingVerification}
+                                            onClick={async () => {
+                                                try {
+                                                    await sendVerificationEmail().unwrap();
+                                                    toast.success("Verification email sent");
+                                                } catch (err) {
+                                                    toast.error(parseApiError(err));
+                                                }
+                                            }}
+                                        >
+                                            Resend verification
+                                        </Button>
+                                    </>
                                 )}
                                 <span className={cn(
                                     "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold",

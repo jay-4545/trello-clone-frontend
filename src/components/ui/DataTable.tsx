@@ -144,7 +144,7 @@ export default function DataTable<T>({
                                         <button
                                             type="button"
                                             onClick={() => onSort(col.id)}
-                                            className="inline-flex items-center gap-1 hover:text-slate-900 transition-colors"
+                                            className="inline-flex items-center gap-1 hover:text-slate-900 transition-colors cursor-pointer"
                                         >
                                             {col.header}
                                             <SortIcon active={sortBy === col.id} dir={sortDir} />

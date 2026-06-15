@@ -99,12 +99,12 @@ export default function NotificationsList({ showHeader = true, className }: Noti
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
                             <button
                                 onClick={() => setShowUnreadOnly(false)}
                                 className={cn(
-                                    "text-xs font-medium px-3 py-1.5 rounded-md transition-colors",
+                                    "text-xs font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer",
                                     !showUnreadOnly
                                         ? "bg-white text-slate-900 shadow-sm"
                                         : "text-slate-500 hover:text-slate-700"
@@ -115,7 +115,7 @@ export default function NotificationsList({ showHeader = true, className }: Noti
                             <button
                                 onClick={() => setShowUnreadOnly(true)}
                                 className={cn(
-                                    "text-xs font-medium px-3 py-1.5 rounded-md transition-colors",
+                                    "text-xs font-medium px-3 py-1.5 rounded-md transition-colors cursor-pointer",
                                     showUnreadOnly
                                         ? "bg-white text-slate-900 shadow-sm"
                                         : "text-slate-500 hover:text-slate-700"

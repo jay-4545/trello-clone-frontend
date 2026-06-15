@@ -35,6 +35,15 @@ export const authApi = baseApi.injectEndpoints({
             invalidatesTags: ["Auth"],
         }),
 
+        sendVerificationEmail: build.mutation<ApiResponse<null>, void>({
+            query: () => ({ url: "/auth/send-verification-email", method: "POST" }),
+        }),
+
+        verifyEmail: build.mutation<ApiResponse<User>, string>({
+            query: (token) => ({ url: `/auth/verify-email?token=${encodeURIComponent(token)}` }),
+            invalidatesTags: ["Auth"],
+        }),
+
     }),
     overrideExisting: false,
 });
@@ -47,4 +56,6 @@ export const {
     useRefreshTokenMutation,
     useChangePasswordMutation,
     useUploadAvatarMutation,
+    useSendVerificationEmailMutation,
+    useVerifyEmailMutation,
 } = authApi;

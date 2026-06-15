@@ -43,15 +43,16 @@ export default function BoardSearchBar({ workspaceId, boardId, onSelectCard }: P
     return (
         <div ref={containerRef} className="relative">
             <button
+                type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+                className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors cursor-pointer"
             >
                 <Search className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Search</span>
             </button>
 
             {open && (
-                <div className="absolute right-0 top-10 z-50 w-72 sm:w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div className="absolute left-0 right-0 sm:left-auto sm:right-0 top-10 z-50 w-full sm:w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
                         <Search className="h-4 w-4 text-slate-400 shrink-0" />
                         <input
@@ -62,7 +63,11 @@ export default function BoardSearchBar({ workspaceId, boardId, onSelectCard }: P
                             className="flex-1 text-sm text-slate-900 focus:outline-none"
                         />
                         {query && (
-                            <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-600">
+                            <button
+                                type="button"
+                                onClick={() => setQuery("")}
+                                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
                                 <X className="h-4 w-4" />
                             </button>
                         )}
@@ -86,7 +91,7 @@ export default function BoardSearchBar({ workspaceId, boardId, onSelectCard }: P
                                         setQuery("");
                                     }}
                                     className={cn(
-                                        "w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0"
+                                        "w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-pointer"
                                     )}
                                 >
                                     <p className="text-sm font-medium text-slate-900 truncate">{card.title}</p>

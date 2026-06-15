@@ -11,12 +11,15 @@ import {
     UserPlus,
     ChevronRight,
     RotateCcw,
+    ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
 import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui";
+import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/components/ui/EmptyState";
 import RoleBadge from "@/components/roles/RoleBadge";
 import ViewOnlyBanner from "@/components/roles/ViewOnlyBanner";
@@ -31,16 +34,11 @@ import type { Board } from "@/lib/api/boardApi";
 import { useWorkspacePermissions } from "@/hooks/usePermissions";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
+import { getBoardColor } from "@/lib/boardColors";
+import { getWorkspaceColor, getWorkspaceColorLight } from "@/lib/workspaceColor";
 
-const BOARD_COLORS = [
-    "#0079BF", "#4BBC4E", "#FF9F1A", "#EB5A46",
-    "#C377E0", "#FF78CB", "#00C2E0", "#0052CC",
-    "#519839", "#B04632", "#89609E", "#CD5A91",
-];
-
-function getBoardColor(board: Board): string {
-    if (board.background) return board.background;
-    return BOARD_COLORS[board.id % BOARD_COLORS.length];
+function getBoardColorFromBoard(board: Board): string {
+    return getBoardColor(board.background, board.id);
 }
 
 export default function WorkspaceDetailPage() {
@@ -101,7 +99,7 @@ export default function WorkspaceDetailPage() {
 
     if (wsLoading) {
         return (
-            <div className="min-h-full bg-slate-50">
+            <div className="min-h-full bg-[#f0f2f5]">
                 <WorkspaceHeaderSkeleton />
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
                     <BoardGridSkeleton />
@@ -112,7 +110,7 @@ export default function WorkspaceDetailPage() {
 
     if (!workspace) {
         return (
-            <div className="min-h-full bg-slate-50 flex items-center justify-center p-6">
+            <div className="min-h-full bg-[#f0f2f5] flex items-center justify-center p-6">
                 <EmptyState
                     icon={<LayoutGrid className="h-6 w-6" />}
                     title="Workspace not found"
@@ -123,78 +121,135 @@ export default function WorkspaceDetailPage() {
         );
     }
 
+    const accent = getWorkspaceColor(workspace.id);
+    const accentLight = getWorkspaceColorLight(workspace.id);
+
     return (
-        <div className="min-h-full bg-slate-50">
+        <div className="min-h-full bg-[#f0f2f5]">
             {fromAdmin && <AdminReturnBanner href="/admin/workspaces" />}
             {isViewer && (
                 <ViewOnlyBanner message="You're a workspace viewer. You can browse boards but cannot create or edit them." />
             )}
-            {/* Workspace header */}
-            <div className="bg-white border-b border-slate-200">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div
-                                className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl flex items-center justify-center text-white font-bold text-lg sm:text-xl shrink-0 shadow-sm"
-                                style={{ background: `hsl(${(workspace.id * 47) % 360}, 65%, 50%)` }}
-                            >
-                                {workspace.name[0].toUpperCase()}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">
-                                        {workspace.name}
-                                    </h1>
-                                    {workspace.myRole && (
-                                        <RoleBadge role={workspace.myRole} scope="workspace" />
+
+            {/* Colored banner */}
+            <div className="relative h-28 sm:h-32" style={{ background: accent }}>
+                <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/25" />
+                <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+                    <Link
+                        href="/workspaces"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80 hover:text-white transition-colors cursor-pointer"
+                    >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        All workspaces
+                    </Link>
+                </div>
+            </div>
+
+            {/* Workspace header card */}
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-10 sm:-mt-12 relative z-10">
+                <Card className="shadow-md border-slate-200/80 overflow-hidden">
+                    <div className="h-1" style={{ background: accent }} />
+                    <CardContent className="pt-5 pb-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex items-start gap-4 min-w-0 flex-1">
+                                <div
+                                    className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl sm:text-2xl shrink-0 shadow-md -mt-1 ring-4 ring-white"
+                                    style={{ background: accent }}
+                                >
+                                    {workspace.name[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1 pt-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">
+                                            {workspace.name}
+                                        </h1>
+                                        {workspace.isPersonal && (
+                                            <Badge variant="purple" size="sm">Personal</Badge>
+                                        )}
+                                        {workspace.myRole && (
+                                            <RoleBadge role={workspace.myRole} scope="workspace" />
+                                        )}
+                                    </div>
+                                    {workspace.description ? (
+                                        <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+                                            {workspace.description}
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm text-slate-400 italic mt-1">No description</p>
+                                    )}
+
+                                    {/* Stats row */}
+                                    <div className="flex items-center gap-3 mt-3 flex-wrap">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMembersOpen(true)}
+                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                                        >
+                                            <Users className="h-3.5 w-3.5" />
+                                            {members.length} member{members.length !== 1 ? "s" : ""}
+                                        </button>
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 px-2.5 py-1 rounded-lg bg-slate-50">
+                                            <LayoutGrid className="h-3.5 w-3.5" />
+                                            {activeBoards.length} board{activeBoards.length !== 1 ? "s" : ""}
+                                        </span>
+                                        {!workspace.isPersonal && (
+                                            <span className="text-xs text-slate-400 font-mono">
+                                                /{workspace.slug}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Member avatar stack */}
+                                    {members.length > 0 && (
+                                        <div className="flex items-center mt-3">
+                                            <div className="flex -space-x-2">
+                                                {members.slice(0, 6).map((m) => (
+                                                    <div
+                                                        key={m.id}
+                                                        title={m.user.name}
+                                                        className="h-7 w-7 rounded-full bg-white ring-2 ring-white flex items-center justify-center text-[10px] font-bold text-slate-700 shadow-sm"
+                                                        style={{ background: accentLight }}
+                                                    >
+                                                        {m.user.name[0].toUpperCase()}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {members.length > 6 && (
+                                                <span className="ml-2 text-xs text-slate-400">
+                                                    +{members.length - 6} more
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                                {workspace.description && (
-                                    <p className="text-xs sm:text-sm text-slate-500 mt-0.5 line-clamp-2">
-                                        {workspace.description}
-                                    </p>
-                                )}
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    <button
-                                        onClick={() => setMembersOpen(true)}
-                                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                {canInvite && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        leftIcon={<UserPlus className="h-3.5 w-3.5" />}
+                                        onClick={() => setInviteOpen(true)}
+                                        className="flex-1 sm:flex-initial"
                                     >
-                                        <Users className="h-3.5 w-3.5" />
-                                        {members.length} member{members.length !== 1 ? "s" : ""}
-                                    </button>
-                                    <span className="text-slate-200">·</span>
-                                    <span className="text-xs text-slate-400 font-mono truncate">
-                                        /{workspace.slug}
-                                    </span>
-                                </div>
+                                        Invite
+                                    </Button>
+                                )}
+                                {canCreateBoard && (
+                                    <Button
+                                        size="sm"
+                                        leftIcon={<Plus className="h-3.5 w-3.5" />}
+                                        onClick={() => setCreateBoardOpen(true)}
+                                        className="flex-1 sm:flex-initial"
+                                    >
+                                        New board
+                                    </Button>
+                                )}
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                            {canInvite && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    leftIcon={<UserPlus className="h-3.5 w-3.5" />}
-                                    onClick={() => setInviteOpen(true)}
-                                    className="flex-1 sm:flex-initial"
-                                >
-                                    Invite
-                                </Button>
-                            )}
-                            {canCreateBoard && (
-                                <Button
-                                    size="sm"
-                                    leftIcon={<Plus className="h-3.5 w-3.5" />}
-                                    onClick={() => setCreateBoardOpen(true)}
-                                    className="flex-1 sm:flex-initial"
-                                >
-                                    New board
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Content */}
@@ -202,11 +257,12 @@ export default function WorkspaceDetailPage() {
                 {/* Starred boards */}
                 {starredBoards.length > 0 && (
                     <section>
-                        <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                            <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                            <h2 className="text-sm font-semibold text-slate-700">Starred boards</h2>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+                        <SectionHeader
+                            icon={<Star className="h-4 w-4 text-amber-400 fill-amber-400" />}
+                            title="Starred boards"
+                            count={starredBoards.length}
+                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                             {starredBoards.map((board) => (
                                 <BoardCard
                                     key={board.id}
@@ -222,24 +278,26 @@ export default function WorkspaceDetailPage() {
 
                 {/* All boards */}
                 <section>
-                    <div className="flex items-center justify-between mb-3 sm:mb-4">
-                        <div className="flex items-center gap-2">
-                            <LayoutGrid className="h-4 w-4 text-slate-400" />
-                            <h2 className="text-sm font-semibold text-slate-700">
-                                {isViewer ? "Available boards" : "Your boards"}
-                            </h2>
-                            {activeBoards.length > 0 && (
-                                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                                    {activeBoards.length}
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                    <SectionHeader
+                        icon={<LayoutGrid className="h-4 w-4 text-slate-400" />}
+                        title={isViewer ? "Available boards" : "Your boards"}
+                        count={activeBoards.length}
+                    />
 
                     {boardsLoading ? (
                         <BoardGridSkeleton />
+                    ) : activeBoards.length === 0 && !canCreateBoard ? (
+                        <Card className="border-dashed">
+                            <CardContent className="py-10">
+                                <EmptyState
+                                    icon={<LayoutGrid className="h-6 w-6" />}
+                                    title="No boards yet"
+                                    description="This workspace doesn't have any boards you can access."
+                                />
+                            </CardContent>
+                        </Card>
                     ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                             {activeBoards.map((board) => (
                                 <BoardCard
                                     key={board.id}
@@ -252,11 +310,14 @@ export default function WorkspaceDetailPage() {
 
                             {canCreateBoard && (
                                 <button
+                                    type="button"
                                     onClick={() => setCreateBoardOpen(true)}
-                                    className="h-[100px] rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-blue-500 transition-all group"
+                                    className="h-[120px] rounded-xl border-2 border-dashed border-slate-300 bg-white/70 hover:border-blue-400 hover:bg-blue-50/80 flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-blue-600 transition-all group cursor-pointer"
                                 >
-                                    <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                                    <span className="text-xs font-medium">Create board</span>
+                                    <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-slate-100 group-hover:bg-blue-100 transition-colors">
+                                        <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </div>
+                                    <span className="text-xs font-semibold">Create new board</span>
                                 </button>
                             )}
                         </div>
@@ -266,68 +327,91 @@ export default function WorkspaceDetailPage() {
                 {/* Closed boards */}
                 {closedBoards.length > 0 && (
                     <section>
-                        <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                            <LayoutGrid className="h-4 w-4 text-slate-400" />
-                            <h2 className="text-sm font-semibold text-slate-700">Closed boards</h2>
-                        </div>
-                        <div className="space-y-2">
-                            {closedBoards.map((board) => (
-                                <div
-                                    key={board.id}
-                                    className="flex items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl"
-                                >
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium text-slate-900 truncate">{board.name}</p>
-                                        {board.description && (
-                                            <p className="text-xs text-slate-500 truncate">{board.description}</p>
+                        <SectionHeader
+                            icon={<LayoutGrid className="h-4 w-4 text-slate-400" />}
+                            title="Closed boards"
+                            count={closedBoards.length}
+                        />
+                        <Card>
+                            <CardContent className="p-0 divide-y divide-slate-100">
+                                {closedBoards.map((board) => (
+                                    <div
+                                        key={board.id}
+                                        className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-slate-50/80 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div
+                                                className="h-8 w-12 rounded-md shrink-0"
+                                                style={{ background: getBoardColorFromBoard(board) }}
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-slate-900 truncate">{board.name}</p>
+                                                {board.description && (
+                                                    <p className="text-xs text-slate-500 truncate">{board.description}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {canManage && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleReopenBoard(board)}
+                                                leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                                            >
+                                                Reopen
+                                            </Button>
                                         )}
                                     </div>
-                                    {canManage && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleReopenBoard(board)}
-                                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
-                                        >
-                                            Reopen
-                                        </Button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </CardContent>
+                        </Card>
                     </section>
                 )}
 
-                {/* Members quick-view */}
+                {/* Members */}
                 {members.length > 0 && (
                     <section>
                         <div className="flex items-center justify-between mb-3 sm:mb-4">
-                            <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-slate-400" />
-                                <h2 className="text-sm font-semibold text-slate-700">Members</h2>
-                            </div>
+                            <SectionHeader
+                                icon={<Users className="h-4 w-4 text-slate-400" />}
+                                title="Members"
+                                count={members.length}
+                                inline
+                            />
                             <button
+                                type="button"
                                 onClick={() => setMembersOpen(true)}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 cursor-pointer"
                             >
                                 {canManage ? "Manage members" : "View members"}
                                 <ChevronRight className="h-3 w-3" />
                             </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {members.map((m) => (
-                                <div
+                                <Card
                                     key={m.id}
-                                    className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2"
+                                    className="hover:shadow-md hover:border-slate-300 transition-all"
                                 >
-                                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-[10px] font-bold shrink-0">
-                                        {m.user.name[0].toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-medium text-slate-800">{m.user.name}</p>
-                                        <RoleBadge role={m.role} scope="workspace" className="mt-0.5" />
-                                    </div>
-                                </div>
+                                    <CardContent className="flex items-center gap-3 py-4">
+                                        <div
+                                            className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                                            style={{ background: accentLight, color: accent }}
+                                        >
+                                            {m.user.name[0].toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium text-slate-800 truncate">
+                                                {m.user.name}
+                                                {m.userId === currentUserId && (
+                                                    <span className="text-slate-400 font-normal ml-1">(you)</span>
+                                                )}
+                                            </p>
+                                            <p className="text-xs text-slate-400 truncate">{m.user.email}</p>
+                                        </div>
+                                        <RoleBadge role={m.role} scope="workspace" />
+                                    </CardContent>
+                                </Card>
                             ))}
                         </div>
                     </section>
@@ -356,6 +440,30 @@ export default function WorkspaceDetailPage() {
     );
 }
 
+function SectionHeader({
+    icon,
+    title,
+    count,
+    inline,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    count?: number;
+    inline?: boolean;
+}) {
+    return (
+        <div className={cn("flex items-center gap-2", !inline && "mb-3 sm:mb-4")}>
+            {icon}
+            <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
+            {count !== undefined && count > 0 && (
+                <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                    {count}
+                </span>
+            )}
+        </div>
+    );
+}
+
 function BoardCard({
     board,
     workspaceId,
@@ -367,12 +475,12 @@ function BoardCard({
     onToggleStar: (board: Board, e: React.MouseEvent) => void;
     canStar?: boolean;
 }) {
-    const bgColor = getBoardColor(board);
+    const bgColor = getBoardColorFromBoard(board);
 
     return (
         <Link
             href={`/workspaces/${workspaceId}/boards/${board.id}`}
-            className="group relative h-[100px] rounded-xl overflow-hidden flex flex-col justify-between p-3 shadow-sm hover:shadow-md transition-all"
+            className="group relative h-[120px] rounded-xl overflow-hidden flex flex-col justify-between p-3.5 shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
             style={{ backgroundColor: bgColor }}
         >
             <div className="flex items-start justify-between relative z-10">
@@ -392,9 +500,10 @@ function BoardCard({
                 </div>
                 {canStar && (
                     <button
+                        type="button"
                         onClick={(e) => onToggleStar(board, e)}
                         className={cn(
-                            "flex items-center justify-center h-6 w-6 rounded transition-all hover:bg-black/20",
+                            "flex items-center justify-center h-7 w-7 rounded-md transition-all hover:bg-black/20 cursor-pointer",
                             board.isStarred
                                 ? "opacity-100"
                                 : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
@@ -426,26 +535,31 @@ function BoardCard({
 
 function WorkspaceHeaderSkeleton() {
     return (
-        <div className="bg-white border-b border-slate-200">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-                <div className="flex items-center gap-3 sm:gap-4">
-                    <Skeleton className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl" />
-                    <div className="space-y-2 flex-1">
-                        <Skeleton className="h-5 w-48" />
-                        <Skeleton className="h-3 w-72 max-w-full" />
-                        <Skeleton className="h-3 w-24" />
-                    </div>
-                </div>
+        <>
+            <Skeleton className="h-28 sm:h-32 w-full rounded-none" />
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-10 relative z-10">
+                <Card>
+                    <CardContent className="pt-5 pb-5">
+                        <div className="flex items-start gap-4">
+                            <Skeleton className="h-16 w-16 rounded-2xl shrink-0" />
+                            <div className="space-y-2 flex-1">
+                                <Skeleton className="h-6 w-48" />
+                                <Skeleton className="h-4 w-72 max-w-full" />
+                                <Skeleton className="h-4 w-32" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
-        </div>
+        </>
     );
 }
 
 function BoardGridSkeleton() {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-[100px] rounded-xl" />
+                <Skeleton key={i} className="h-[120px] rounded-xl" />
             ))}
         </div>
     );

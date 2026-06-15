@@ -6,6 +6,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Briefcase } from "lucide-react";
 
+import { useRouter } from "next/navigation";
 import Modal from "@/components/ui/Modal";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export default function CreateWorkspaceModal({ open, onClose }: Props) {
+    const router = useRouter();
     const [createWorkspace, { isLoading }] = useCreateWorkspaceMutation();
 
     const {
@@ -44,6 +46,7 @@ export default function CreateWorkspaceModal({ open, onClose }: Props) {
             toast.success(`Workspace "${res.data!.name}" created`);
             reset();
             onClose();
+            router.push(`/workspaces/${res.data!.id}`);
         } catch (err) {
             toast.error(parseApiError(err));
         }

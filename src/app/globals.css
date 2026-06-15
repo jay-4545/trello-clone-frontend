@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
 
 :root {
   --background: #ffffff;
@@ -12,15 +13,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+  Z-index scale (Tailwind):
+  z-30 — app chrome, board toolbar
+  z-40 — dropdowns, list menus, search results
+  z-50 — modals, slide-overs, mobile sidebar
+*/
+
+html,
+body {
+  overflow-x: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

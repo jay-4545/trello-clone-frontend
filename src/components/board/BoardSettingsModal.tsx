@@ -174,7 +174,7 @@ export default function BoardSettingsModal({ open, onClose, workspaceId, board, 
                                     type="button"
                                     onClick={() => setSelectedColor(c.value)}
                                     className={cn(
-                                        "relative h-9 w-12 rounded-md transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1",
+                                        "relative h-9 w-12 rounded-md transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 cursor-pointer",
                                         selectedColor === c.value && "ring-2 ring-offset-1 ring-blue-500"
                                     )}
                                     style={{ backgroundColor: c.value }}
@@ -198,7 +198,7 @@ export default function BoardSettingsModal({ open, onClose, workspaceId, board, 
                                     type="button"
                                     onClick={() => setVisibility(opt.value)}
                                     className={cn(
-                                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-all",
+                                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-all cursor-pointer",
                                         visibility === opt.value
                                             ? "border-blue-300 bg-blue-50"
                                             : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"

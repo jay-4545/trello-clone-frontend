@@ -8,7 +8,7 @@ import {
     useGetArchivedCardsQuery,
     useRestoreCardMutation,
 } from "@/lib/api/cardApi";
-import { useGetArchivedListsQuery } from "@/lib/api/listApi";
+import { useGetArchivedListsQuery, useRestoreListMutation } from "@/lib/api/listApi";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
 
@@ -31,7 +31,8 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
         { workspaceId, boardId },
         { skip: !open }
     );
-    const [restoreCard, { isLoading: restoring }] = useRestoreCardMutation();
+    const [restoreCard, { isLoading: restoringCard }] = useRestoreCardMutation();
+    const [restoreList, { isLoading: restoringList }] = useRestoreListMutation();
 
     const archivedCards = cardsData?.data ?? [];
     const archivedLists = listsData?.data ?? [];
@@ -40,6 +41,15 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
         try {
             await restoreCard({ workspaceId, boardId, listId, cardId }).unwrap();
             toast.success("Card restored");
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const handleRestoreList = async (listId: number) => {
+        try {
+            await restoreList({ workspaceId, boardId, listId }).unwrap();
+            toast.success("List restored");
         } catch (err) {
             toast.error(parseApiError(err));
         }
@@ -104,7 +114,7 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            loading={restoring}
+                                            loading={restoringCard}
                                             onClick={() => handleRestoreCard(card.id, card.listId)}
                                             leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
                                         >
@@ -129,12 +139,22 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
                             archivedLists.map((list) => (
                                 <div
                                     key={list.id}
-                                    className="p-3 rounded-xl border border-slate-200 bg-slate-50"
+                                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50"
                                 >
-                                    <p className="text-sm font-medium text-slate-900">{list.name}</p>
-                                    <p className="text-xs text-slate-500 mt-1">
-                                        Archived lists cannot be restored yet. Create a new list if needed.
-                                    </p>
+                                    <p className="text-sm font-medium text-slate-900 min-w-0 truncate">{list.name}</p>
+                                    {canRestore ? (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            loading={restoringList}
+                                            onClick={() => handleRestoreList(list.id)}
+                                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                                        >
+                                            Restore
+                                        </Button>
+                                    ) : (
+                                        <span className="text-xs text-slate-400 shrink-0">View only</span>
+                                    )}
                                 </div>
                             ))
                         )

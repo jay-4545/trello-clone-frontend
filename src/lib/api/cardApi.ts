@@ -64,7 +64,8 @@ export const cardApi = baseApi.injectEndpoints({
                 method: "PATCH",
                 body,
             }),
-            invalidatesTags: (_r, _e, { listId, body }) => [
+            invalidatesTags: (_r, _e, { listId, cardId, body }) => [
+                { type: "Card", id: cardId },
                 { type: "Card", id: `list-${listId}` },
                 { type: "Card", id: `list-${body.targetListId}` },
             ],
@@ -205,6 +206,14 @@ export const cardApi = baseApi.injectEndpoints({
             invalidatesTags: (_r, _e, { cardId }) => [{ type: "Card", id: cardId }],
         }),
 
+        toggleWatch: build.mutation<ApiResponse<{ isWatched: boolean }>, { workspaceId: number; boardId: number; listId: number; cardId: number }>({
+            query: ({ workspaceId, boardId, listId, cardId }) => ({
+                url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}/watch`,
+                method: "PATCH",
+            }),
+            invalidatesTags: (_r, _e, { cardId }) => [{ type: "Card", id: cardId }],
+        }),
+
     }),
     overrideExisting: false,
 });
@@ -231,4 +240,5 @@ export const {
     useGetArchivedCardsQuery,
     useUploadAttachmentMutation,
     useDeleteAttachmentMutation,
+    useToggleWatchMutation,
 } = cardApi;

@@ -35,6 +35,8 @@ interface BaseSelectProps {
     emptyMessage?: string;
     id?: string;
     name?: string;
+    /** Use inside modals — raises z-index above dialog */
+    inModal?: boolean;
 }
 
 export interface SingleSelectProps extends BaseSelectProps {
@@ -57,8 +59,13 @@ const sizeStyles: Record<SelectSize, string> = {
     md: "text-sm px-3 py-2.5 min-h-[42px]",
 };
 
-function useDropdownPosition(open: boolean, triggerRef: React.RefObject<HTMLElement | null>) {
+function useDropdownPosition(
+    open: boolean,
+    triggerRef: React.RefObject<HTMLElement | null>,
+    zIndex: number
+) {
     const [style, setStyle] = useState<React.CSSProperties>({});
+    const [ready, setReady] = useState(false);
 
     const update = useCallback(() => {
         const el = triggerRef.current;
@@ -70,16 +77,21 @@ function useDropdownPosition(open: boolean, triggerRef: React.RefObject<HTMLElem
         setStyle({
             position: "fixed",
             left: rect.left,
-            width: rect.width,
-            zIndex: 9999,
+            width: Math.max(rect.width, 200),
+            zIndex,
             ...(openUp
                 ? { bottom: window.innerHeight - rect.top + 4 }
                 : { top: rect.bottom + 4 }),
         });
-    }, [triggerRef]);
+        setReady(true);
+    }, [triggerRef, zIndex]);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            setReady(false);
+            setStyle({});
+            return;
+        }
         update();
         window.addEventListener("resize", update);
         window.addEventListener("scroll", update, true);
@@ -89,7 +101,7 @@ function useDropdownPosition(open: boolean, triggerRef: React.RefObject<HTMLElem
         };
     }, [open, update]);
 
-    return style;
+    return { style, ready };
 }
 
 export default function Select(props: SelectProps) {
@@ -108,6 +120,7 @@ export default function Select(props: SelectProps) {
         emptyMessage = "No options found",
         id: externalId,
         name,
+        inModal = false,
     } = props;
 
     const isMultiple = props.mode === "multiple";
@@ -121,7 +134,11 @@ export default function Select(props: SelectProps) {
 
     const containerRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const dropdownStyle = useDropdownPosition(open, triggerRef);
+    const { style: dropdownStyle, ready: dropdownReady } = useDropdownPosition(
+        open,
+        triggerRef,
+        inModal ? 10050 : 9999
+    );
 
     const currentValue = props.value;
 
@@ -259,14 +276,15 @@ export default function Select(props: SelectProps) {
         : (props.value !== "" && props.value != null);
     const maxTags = isMultiple ? (props.maxTags ?? 2) : 0;
 
-    const dropdown = open && typeof document !== "undefined"
+    const dropdown = open && dropdownReady && typeof document !== "undefined"
         ? createPortal(
             <div
                 id={listboxId}
                 role="listbox"
                 aria-multiselectable={isMultiple}
                 style={dropdownStyle}
-                className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100"
+                onMouseDown={(e) => e.stopPropagation()}
+                className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden"
             >
                 {searchable && (
                     <div className="p-2 border-b border-slate-100">
@@ -398,7 +416,7 @@ export default function Select(props: SelectProps) {
                                                 role="button"
                                                 tabIndex={-1}
                                                 onClick={(e) => removeTag(e, v)}
-                                                className="hover:text-blue-900"
+                                                className="hover:text-blue-900 cursor-pointer"
                                             >
                                                 <X className="h-3 w-3" />
                                             </span>
@@ -425,7 +443,7 @@ export default function Select(props: SelectProps) {
                             role="button"
                             tabIndex={-1}
                             onClick={clearValue}
-                            className="hover:text-slate-600 p-0.5"
+                            className="hover:text-slate-600 p-0.5 cursor-pointer"
                             aria-label="Clear selection"
                         >
                             <X className="h-3.5 w-3.5" />

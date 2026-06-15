@@ -140,7 +140,7 @@ export default function Pagination({
                                 key={p}
                                 onClick={() => onPageChange(p)}
                                 className={cn(
-                                    "min-w-[32px] h-8 px-2 rounded-lg text-sm font-medium transition-colors",
+                                    "min-w-[32px] h-8 px-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
                                     p === page
                                         ? "bg-violet-600 text-white shadow-sm"
                                         : "text-slate-600 hover:bg-white hover:shadow-sm"
@@ -204,7 +204,7 @@ function PaginationBtn({
                 "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
                 disabled
                     ? "text-slate-300 cursor-not-allowed"
-                    : "text-slate-600 hover:bg-white hover:shadow-sm"
+                    : "text-slate-600 hover:bg-white hover:shadow-sm cursor-pointer"
             )}
             {...props}
         >

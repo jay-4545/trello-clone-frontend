@@ -9,8 +9,15 @@ import { toast } from "sonner";
 
 import CardItem from "./CardItem";
 import CreateCardModal from "./CreateCardModal";
-import Button from "@/components/ui/Button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Card } from "@/types/card.types";
+import type { BoardTheme } from "@/lib/boardTheme";
+import { getBoardTheme } from "@/lib/boardTheme";
 import { useCreateCardMutation } from "@/lib/api/cardApi";
 import { useArchiveListMutation, useUpdateListMutation } from "@/lib/api/listApi";
 import { parseApiError } from "@/utils/errorParser";
@@ -27,12 +34,27 @@ interface Props {
     list: LocalList;
     workspaceId: number;
     boardId: number;
+    boardColor: string;
     onCardClick: (card: Card) => void;
     readOnly?: boolean;
+    selectMode?: boolean;
+    selectedCardIds?: Set<number>;
+    onToggleCardSelect?: (cardId: number) => void;
 }
 
-export default function ListColumn({ list, workspaceId, boardId, onCardClick, readOnly = false }: Props) {
-    const [menuOpen, setMenuOpen] = useState(false);
+export default function ListColumn({
+    list,
+    workspaceId,
+    boardId,
+    boardColor,
+    onCardClick,
+    readOnly = false,
+    selectMode = false,
+    selectedCardIds,
+    onToggleCardSelect,
+}: Props) {
+    const theme = getBoardTheme(boardColor);
+
     const [editingName, setEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(list.name);
     const [addingCard, setAddingCard] = useState(false);
@@ -67,6 +89,10 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
         opacity: isDragging ? 0.4 : 1,
     };
 
+    const menuContentClass = theme.isDarkCanvas
+        ? "bg-[#282e33] border-white/10 text-[#c9d1d9] [&_[data-highlighted]]:bg-white/10"
+        : undefined;
+
     const handleCreateCard = async () => {
         const title = cardTitle.trim();
         if (!title) return;
@@ -78,7 +104,6 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
                 body: { title },
             }).unwrap();
             setCardTitle("");
-            // Keep the form open so user can add multiple cards
         } catch (err) {
             toast.error(parseApiError(err));
         }
@@ -109,7 +134,6 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
         } catch (err) {
             toast.error(parseApiError(err));
         }
-        setMenuOpen(false);
     };
 
     return (
@@ -117,15 +141,18 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
         <div
             ref={setNodeRef}
             style={style}
-            className="w-72 shrink-0 bg-slate-100/95 backdrop-blur-sm rounded-xl flex flex-col max-h-full shadow-sm"
+            className={cn("w-72 shrink-0 self-start max-h-[calc(100dvh-10rem)] rounded-xl flex flex-col ring-1 ring-black/[0.06]", theme.listColumn)}
         >
             {/* List header */}
-            <div className="flex items-center gap-1 px-2 py-2 shrink-0">
+            <div className="flex items-center gap-1 px-2 py-2.5 shrink-0">
                 {!readOnly && (
                     <button
                         {...attributes}
                         {...listeners}
-                        className="flex items-center justify-center h-6 w-5 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing touch-none"
+                        className={cn(
+                            "flex items-center justify-center h-6 w-5 cursor-grab active:cursor-grabbing touch-none",
+                            theme.isDarkCanvas ? "text-white/40 hover:text-white/70" : "text-slate-300 hover:text-slate-500"
+                        )}
                         aria-label="Drag list"
                     >
                         <GripVertical className="h-4 w-4" />
@@ -145,72 +172,71 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
                                 setEditingName(false);
                             }
                         }}
-                        className="flex-1 text-sm font-semibold text-slate-800 bg-white border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={cn(
+                            "flex-1 text-sm font-semibold rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            theme.isDarkCanvas
+                                ? "text-white bg-white/10 border border-white/30"
+                                : "text-slate-800 bg-white border border-blue-300"
+                        )}
                     />
                 ) : (
                     <button
                         onClick={() => !readOnly && setEditingName(true)}
                         className={cn(
-                            "flex-1 text-left text-sm font-semibold text-slate-800 rounded px-2 py-1 truncate",
-                            !readOnly && "hover:bg-slate-200/60"
+                            "flex-1 text-left text-sm font-semibold rounded px-2 py-1 truncate cursor-pointer",
+                            theme.listHeader,
+                            !readOnly && (theme.isDarkCanvas ? "hover:bg-white/10" : "hover:bg-black/5")
                         )}
                     >
                         {list.name}
                     </button>
                 )}
 
-                <span className="text-xs text-slate-400 px-1.5">{list.cards.length}</span>
+                <span className={cn("text-xs px-1.5", theme.listCount)}>{list.cards.length}</span>
 
-                {!readOnly && <div className="relative">
-                    <button
-                        onClick={() => setMenuOpen((v) => !v)}
-                        className="flex items-center justify-center h-7 w-7 rounded hover:bg-slate-200 text-slate-500 transition-colors"
-                        aria-label="List options"
-                    >
-                        <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                    {menuOpen && (
-                        <>
-                            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                            <div className="absolute right-0 top-8 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                <button
-                                    onClick={() => { setEditingName(true); setMenuOpen(false); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    Rename
-                                </button>
-                                <button
-                                    onClick={() => { setAddingCard(true); setMenuOpen(false); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    Add card
-                                </button>
-                                <button
-                                    onClick={() => { setDetailedCreateOpen(true); setMenuOpen(false); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                >
-                                    <Settings className="h-3.5 w-3.5" />
-                                    Add card with details…
-                                </button>
-                                <button
-                                    onClick={handleArchive}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                    <Archive className="h-3.5 w-3.5" />
-                                    Archive list
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>}
+                {!readOnly && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className={cn(
+                                    "flex items-center justify-center h-7 w-7 rounded transition-colors cursor-pointer outline-none",
+                                    theme.listMenuBtn
+                                )}
+                                aria-label="List options"
+                            >
+                                <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className={menuContentClass}>
+                            <DropdownMenuItem onSelect={() => setEditingName(true)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                                Rename list
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setAddingCard(true)}>
+                                <Plus className="h-3.5 w-3.5" />
+                                Add card
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setDetailedCreateOpen(true)}>
+                                <Settings className="h-3.5 w-3.5" />
+                                Add card with details…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={handleArchive}
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                                <Archive className="h-3.5 w-3.5" />
+                                Archive list
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
 
             {/* Cards area */}
             <div
                 ref={setDroppableRef}
-                className="flex-1 overflow-y-auto px-2 pb-1 space-y-2 min-h-[20px]"
+                className="flex-1 overflow-y-auto px-2 pb-1 space-y-2 min-h-0"
             >
                 <SortableContext
                     items={list.cards.map((c) => `card-${c.id}`)}
@@ -220,81 +246,82 @@ export default function ListColumn({ list, workspaceId, boardId, onCardClick, re
                         <CardItem
                             key={card.id}
                             card={card}
+                            theme={theme}
                             onClick={() => onCardClick(card)}
                             readOnly={readOnly}
+                            selectMode={selectMode}
+                            selected={selectedCardIds?.has(card.id)}
+                            onToggleSelect={() => onToggleCardSelect?.(card.id)}
                         />
                     ))}
                 </SortableContext>
 
                 {list.cards.length === 0 && !addingCard && (
-                    <div className="h-12 border-2 border-dashed border-slate-300/50 rounded-lg flex items-center justify-center">
-                        <span className="text-[11px] text-slate-400">Drop cards here</span>
+                    <div className={cn("h-10 border border-dashed rounded-lg flex items-center justify-center", theme.dropZone)}>
+                        <span className="text-[11px]">Drop cards here</span>
                     </div>
                 )}
             </div>
 
             {/* Add card */}
-            {!readOnly && <div className="px-2 pb-2 pt-1 shrink-0">
-                {addingCard ? (
-                    <div className="space-y-2">
-                        <textarea
-                            autoFocus
-                            value={cardTitle}
-                            onChange={(e) => setCardTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleCreateCard();
-                                }
-                                if (e.key === "Escape") {
-                                    setAddingCard(false);
-                                    setCardTitle("");
-                                }
-                            }}
-                            placeholder="Enter a title for this card…"
-                            rows={2}
-                            className="w-full text-sm text-slate-900 bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-slate-400"
-                        />
-                        <div className="flex items-center gap-2">
-                            <Button
-                                size="sm"
-                                onClick={handleCreateCard}
-                                loading={creatingCard}
-                                disabled={!cardTitle.trim()}
-                            >
-                                Add card
-                            </Button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setAddingCard(false);
-                                    setCardTitle("");
-                                    setDetailedCreateOpen(true);
+            {!readOnly && (
+                <div className="px-2 pb-2 pt-0.5 shrink-0">
+                    {addingCard ? (
+                        <div className="space-y-2">
+                            <textarea
+                                autoFocus
+                                value={cardTitle}
+                                onChange={(e) => setCardTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleCreateCard();
+                                    }
+                                    if (e.key === "Escape") {
+                                        setAddingCard(false);
+                                        setCardTitle("");
+                                    }
                                 }}
-                                className="text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded px-2 py-1.5"
-                                title="Add with details"
-                            >
-                                <Settings className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                                onClick={() => { setAddingCard(false); setCardTitle(""); }}
-                                className="flex items-center justify-center h-8 w-8 rounded hover:bg-slate-200 text-slate-500 transition-colors"
-                                aria-label="Cancel"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
+                                placeholder="Enter a title for this card…"
+                                rows={3}
+                                className="w-full text-sm text-[#172b4d] bg-white border-0 rounded-lg px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-slate-400"
+                            />
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleCreateCard}
+                                    disabled={!cardTitle.trim() || creatingCard}
+                                    className="inline-flex items-center justify-center text-sm font-medium text-white bg-[#0c66e4] hover:bg-[#0055cc] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
+                                >
+                                    {creatingCard ? "Adding…" : "Add card"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setAddingCard(false); setCardTitle(""); }}
+                                    className={cn(
+                                        "flex items-center justify-center h-8 w-8 rounded transition-colors cursor-pointer",
+                                        theme.listMenuBtn
+                                    )}
+                                    aria-label="Cancel"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => setAddingCard(true)}
-                        className="w-full flex items-center gap-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg px-2 py-2 text-xs font-medium transition-colors"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add a card
-                    </button>
-                )}
-            </div>}
+                    ) : (
+                        <button
+                            onClick={() => setAddingCard(true)}
+                            className={cn(
+                                "w-full flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors cursor-pointer",
+                                theme.listAddBtn
+                            )}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add a card
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
 
         <CreateCardModal

@@ -1,9 +1,10 @@
 // src/app/(auth)/login/page.tsx
 import type { Metadata } from "next";
 import LoginForm from "@/components/auth/LoginForm";
+import { APP_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-    title: "Sign In | Trello Clone",
+    title: `Sign In | ${APP_NAME}`,
     description: "Sign in to your account",
 };
 

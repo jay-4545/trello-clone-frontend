@@ -235,7 +235,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
             {/* Main */}
             <main className="flex-1 overflow-y-auto min-h-0 pt-14 lg:pt-0">
-                <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-5">
+                <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-5 hidden lg:block">
                     <h1 className="text-xl font-bold text-slate-900">{pageMeta.title}</h1>
                     {pageMeta.description && (
                         <p className="text-sm text-slate-500 mt-0.5">{pageMeta.description}</p>

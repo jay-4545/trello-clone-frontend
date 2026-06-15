@@ -57,14 +57,14 @@ export default function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 py-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? "modal-title" : undefined}
         >
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-200"
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-200"
                 onClick={onClose}
                 aria-hidden="true"
             />
@@ -73,12 +73,13 @@ export default function Modal({
             <div
                 className={cn(
                     "relative w-full bg-white rounded-xl shadow-2xl animate-in zoom-in-95 fade-in-0 duration-200",
+                    "flex flex-col max-h-[min(90dvh,calc(100dvh-2rem))]",
                     sizeMap[size],
                     className
                 )}
             >
                 {(title || !hideCloseButton) && (
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
                         <div>
                             {title && (
                                 <h2 id="modal-title" className="text-base font-semibold text-slate-900">
@@ -102,7 +103,7 @@ export default function Modal({
                         )}
                     </div>
                 )}
-                <div className="px-6 py-5">{children}</div>
+                <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">{children}</div>
             </div>
         </div>,
         document.body

@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -10,45 +11,49 @@ import {
   Globe,
   Shield,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuthToken } from "@/hooks/useAuthToken";
+import { APP_NAME } from "@/lib/brand";
 
 export default function HomePage() {
   const isLoggedIn = useAuthToken();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-blue-600 shadow-sm shadow-blue-300">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-blue-600 shadow-sm shadow-blue-300 shrink-0">
               <LayoutDashboard className="h-5 w-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight">
-              Taskboard
+            <span className="text-lg font-bold text-slate-900 tracking-tight truncate">
+              {APP_NAME}
             </span>
           </div>
 
-          {/* Nav links */}
+          {/* Nav links — desktop */}
           <nav className="hidden md:flex items-center gap-6">
             <a
               href="#features"
-              className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              className="text-sm text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
             >
               Features
             </a>
             <a
               href="#how-it-works"
-              className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              className="text-sm text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
             >
               How it works
             </a>
             {!isLoggedIn && (
               <a
                 href="#pricing"
-                className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-sm text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               >
                 Pricing
               </a>
@@ -56,34 +61,83 @@ export default function HomePage() {
           </nav>
 
           {/* CTA */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen((v) => !v)}
+              className="md:hidden flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+              aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileNavOpen}
+            >
+              {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
             {isLoggedIn ? (
               <Link
                 href="/workspaces"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-3 sm:px-4 py-2.5 rounded-lg shadow-sm transition-colors"
               >
-                Go to Dashboard
+                <span className="hidden sm:inline">Go to Dashboard</span>
+                <span className="sm:hidden">Dashboard</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             ) : (
               <>
                 <Link
                   href="/login"
-                  className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors px-3 py-2"
+                  className="hidden sm:inline text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors px-3 py-2"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/register"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-3 sm:px-4 py-2.5 rounded-lg shadow-sm transition-colors"
                 >
-                  Get started free
+                  <span className="hidden sm:inline">Get started free</span>
+                  <span className="sm:hidden">Sign up</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </>
             )}
           </div>
         </div>
+
+        {/* Mobile nav drawer */}
+        {mobileNavOpen && (
+          <nav className="md:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-1">
+            <a
+              href="#features"
+              onClick={() => setMobileNavOpen(false)}
+              className="px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
+            >
+              Features
+            </a>
+            <a
+              href="#how-it-works"
+              onClick={() => setMobileNavOpen(false)}
+              className="px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
+            >
+              How it works
+            </a>
+            {!isLoggedIn && (
+              <a
+                href="#pricing"
+                onClick={() => setMobileNavOpen(false)}
+                className="px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
+              >
+                Pricing
+              </a>
+            )}
+            {!isLoggedIn && (
+              <Link
+                href="/login"
+                onClick={() => setMobileNavOpen(false)}
+                className="px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"
+              >
+                Log in
+              </Link>
+            )}
+          </nav>
+        )}
       </header>
 
       {/* Hero */}
@@ -93,7 +147,7 @@ export default function HomePage() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full bg-indigo-500/20 blur-3xl" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-blue-500/10 blur-3xl" />
 
-        <div className="relative max-w-7xl mx-auto px-6 py-24 lg:py-32">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-24 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left text */}
             <div className="text-white">
@@ -101,7 +155,7 @@ export default function HomePage() {
                 <Star className="h-3 w-3 fill-blue-200 text-blue-200" />
                 Trusted by 10,000+ teams worldwide
               </div>
-              <h1 className="text-5xl lg:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
                 Organise your
                 <br />
                 <span className="text-blue-200">team&apos;s work,</span>
@@ -110,7 +164,7 @@ export default function HomePage() {
               </h1>
               <p className="text-blue-100 text-lg leading-relaxed mb-10 max-w-md">
                 Boards, lists and cards help you manage tasks with total clarity.
-                From sprint planning to launch day — Taskboard keeps your team
+                From sprint planning to launch day — {APP_NAME} keeps your team
                 aligned.
               </p>
 
@@ -254,13 +308,13 @@ export default function HomePage() {
 
       {/* Features */}
       <section id="features" className="bg-slate-50 py-24">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
               Everything your team needs
             </h2>
             <p className="text-slate-500 text-lg max-w-xl mx-auto">
-              From simple task tracking to complex project management — Taskboard
+              From simple task tracking to complex project management — {APP_NAME}
               adapts to your workflow.
             </p>
           </div>
@@ -325,7 +379,7 @@ export default function HomePage() {
 
       {/* How it works */}
       <section id="how-it-works" className="bg-white py-24">
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
               Up and running in minutes
@@ -369,15 +423,94 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section id="pricing" className="bg-slate-50 py-24">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
+              Simple, transparent pricing
+            </h2>
+            <p className="text-slate-500 text-lg">
+              Start free. Upgrade when your team grows.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                name: "Free",
+                price: "$0",
+                period: "forever",
+                desc: "For individuals and small teams getting started.",
+                features: ["Unlimited boards", "Workspaces & members", "Real-time sync", "Card attachments"],
+                cta: "Get started free",
+                highlight: false,
+              },
+              {
+                name: "Team",
+                price: "$8",
+                period: "per user / month",
+                desc: "For growing teams that need more control.",
+                features: ["Everything in Free", "Advanced permissions", "Board stats", "Priority support"],
+                cta: "Start team trial",
+                highlight: true,
+              },
+              {
+                name: "Business",
+                price: "$12",
+                period: "per user / month",
+                desc: "For organisations with advanced needs.",
+                features: ["Everything in Team", "Admin dashboard", "Audit logs", "SSO ready"],
+                cta: "Contact sales",
+                highlight: false,
+              },
+            ].map((plan) => (
+              <div
+                key={plan.name}
+                className={`rounded-2xl border p-6 flex flex-col ${
+                  plan.highlight
+                    ? "border-blue-500 bg-white shadow-lg shadow-blue-100 ring-1 ring-blue-500"
+                    : "border-slate-200 bg-white"
+                }`}
+              >
+                <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+                <div className="mt-3 mb-2">
+                  <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
+                  <span className="text-sm text-slate-500 ml-1">{plan.period}</span>
+                </div>
+                <p className="text-sm text-slate-500 mb-6">{plan.desc}</p>
+                <ul className="space-y-2 mb-8 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
+                      <CheckSquare className="h-4 w-4 text-blue-500 shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/register"
+                  className={`block text-center text-sm font-semibold py-2.5 rounded-lg transition-colors ${
+                    plan.highlight
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Banner */}
       {!isLoggedIn && (
         <section className="bg-gradient-to-r from-blue-600 to-indigo-700 py-20">
-          <div className="max-w-3xl mx-auto px-6 text-center">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
             <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
               Ready to get organised?
             </h2>
             <p className="text-blue-100 text-lg mb-8">
-              Join thousands of teams already using Taskboard. Free forever for
+              Join thousands of teams already using {APP_NAME}. Free forever for
               small teams.
             </p>
             <Link
@@ -393,15 +526,15 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center h-7 w-7 rounded-md bg-blue-600">
               <LayoutDashboard className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-white font-semibold text-sm">Taskboard</span>
+            <span className="text-white font-semibold text-sm">{APP_NAME}</span>
           </div>
           <p className="text-xs">
-            © {new Date().getFullYear()} Taskboard. Built with ❤️ for productive teams.
+            © {new Date().getFullYear()} {APP_NAME}. Built with ❤️ for productive teams.
           </p>
           <div className="flex items-center gap-4 text-xs">
             {isLoggedIn ? (

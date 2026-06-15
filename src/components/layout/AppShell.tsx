@@ -20,8 +20,10 @@ import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import Avatar from "@/components/ui/Avatar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { performLogout } from "@/store/authSession";
+import { setCreateWorkspaceModal } from "@/store/slices/uiSlice";
+import CreateWorkspaceModal from "@/components/workspace/CreateWorkspaceModal";
 import { useLogoutMutation, useGetProfileQuery } from "@/lib/api/authApi";
 import { useGetMyWorkspacesQuery } from "@/lib/api/workspaceApi";
 import { useGetUnreadCountQuery } from "@/lib/api/notificationApi";
@@ -29,6 +31,7 @@ import { useNotificationSocket } from "@/lib/socket/useNotificationSocket";
 import { useAuthToken } from "@/hooks/useAuthToken";
 import { isSystemAdmin } from "@/hooks/usePermissions";
 import RoleBadge from "@/components/roles/RoleBadge";
+import { APP_NAME } from "@/lib/brand";
 
 interface AppShellProps {
     children: React.ReactNode;
@@ -42,6 +45,12 @@ export default function AppShell({ children }: AppShellProps) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
+    const createWorkspaceOpen = useAppSelector((s) => s.ui.createWorkspaceModalOpen);
+
+    const handleOpenCreateWorkspace = () => {
+        dispatch(setCreateWorkspaceModal(true));
+        setMobileOpen(false);
+    };
 
     const hasToken = useAuthToken();
 
@@ -57,6 +66,7 @@ export default function AppShell({ children }: AppShellProps) {
     const unreadCount = unreadData?.data?.count ?? 0;
     const showAdminNav = isSystemAdmin(user?.role);
     const profileHref = showAdminNav ? "/admin/profile" : "/profile";
+    const isBoardPage = /\/boards\/\d+/.test(pathname);
 
     const handleLogout = async () => {
         await performLogout(dispatch, () => logoutMutation().unwrap());
@@ -90,7 +100,7 @@ export default function AppShell({ children }: AppShellProps) {
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 shadow-sm">
                         <LayoutDashboard className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <span className="text-sm font-bold text-white">Taskboard</span>
+                    <span className="text-sm font-bold text-white">{APP_NAME}</span>
                 </div>
 
                 <Link
@@ -139,7 +149,7 @@ export default function AppShell({ children }: AppShellProps) {
                             "text-sm font-bold text-white tracking-tight",
                             collapsed && "lg:hidden"
                         )}>
-                            Taskboard
+                            {APP_NAME}
                         </span>
                     )}
                     <button
@@ -162,24 +172,28 @@ export default function AppShell({ children }: AppShellProps) {
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                 Workspaces
                             </span>
-                            <Link
-                                href="/workspaces/create"
-                                className="flex items-center justify-center h-5 w-5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                            <button
+                                type="button"
+                                onClick={handleOpenCreateWorkspace}
+                                className="flex items-center justify-center h-5 w-5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
                                 title="New workspace"
+                                aria-label="New workspace"
                             >
                                 <Plus className="h-3.5 w-3.5" />
-                            </Link>
+                            </button>
                         </div>
                     )}
 
                     {collapsed && !mobileOpen && (
-                        <Link
-                            href="/workspaces/create"
-                            className="hidden lg:flex items-center justify-center h-9 w-full rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors mb-1"
+                        <button
+                            type="button"
+                            onClick={handleOpenCreateWorkspace}
+                            className="hidden lg:flex items-center justify-center h-9 w-full rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors mb-1 cursor-pointer"
                             title="New workspace"
+                            aria-label="New workspace"
                         >
                             <Plus className="h-4 w-4" />
-                        </Link>
+                        </button>
                     )}
 
                     {loadingWs ? (
@@ -368,7 +382,10 @@ export default function AppShell({ children }: AppShellProps) {
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 overflow-y-auto min-h-0 pt-14 lg:pt-0 bg-slate-100">
+            <main className={cn(
+                "flex-1 min-h-0 pt-14 lg:pt-0 bg-slate-100",
+                isBoardPage ? "overflow-hidden" : "overflow-y-auto"
+            )}>
                 {children}
             </main>
 
@@ -381,10 +398,15 @@ export default function AppShell({ children }: AppShellProps) {
                     setConfirmSignOut(false);
                 }}
                 loading={loggingOut}
-                title="Sign out of Taskboard?"
+                title={`Sign out of ${APP_NAME}?`}
                 description="You'll need to sign in again to access your workspaces and boards."
                 confirmLabel="Sign out"
                 cancelLabel="Stay signed in"
+            />
+
+            <CreateWorkspaceModal
+                open={createWorkspaceOpen}
+                onClose={() => dispatch(setCreateWorkspaceModal(false))}
             />
         </div>
     );

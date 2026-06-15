@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Anyone can visit these paths without a cookie (cookie may still be expired — validated by API)
-const PUBLIC_PATHS = ["/", "/login", "/register"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/verify-email"];
 
 export function middleware(request: NextRequest) {
     const accessToken = request.cookies.get("access_token")?.value;

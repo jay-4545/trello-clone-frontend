@@ -36,13 +36,17 @@ import {
     Pencil,
     Trash2,
     Archive,
+    ChevronDown,
     CheckSquare,
+    LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
 import Button from "@/components/ui/Button";
+import Avatar from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui";
+import EmptyState from "@/components/ui/EmptyState";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -60,6 +64,9 @@ import BoardSettingsModal from "@/components/board/BoardSettingsModal";
 import BoardMembersModal from "@/components/board/BoardMembersModal";
 import BoardSearchBar from "@/components/board/BoardSearchBar";
 import ArchivedItemsPanel from "@/components/board/ArchivedItemsPanel";
+import BoardBottomNav, { BOARD_BOTTOM_NAV_HEIGHT } from "@/components/board/BoardBottomNav";
+import BoardSwitcherSheet from "@/components/board/BoardSwitcherSheet";
+import BoardPageSkeleton from "@/components/board/BoardPageSkeleton";
 import {
     useGetBoardDetailQuery,
     useUpdateBoardMutation,
@@ -67,6 +74,7 @@ import {
 } from "@/lib/api/boardApi";
 import { useGetWorkspaceQuery } from "@/lib/api/workspaceApi";
 import { useGetProfileQuery } from "@/lib/api/authApi";
+import { useGetUnreadCountQuery } from "@/lib/api/notificationApi";
 import {
     useGetListsQuery,
     useCreateListMutation,
@@ -78,13 +86,15 @@ import {
     useGetBoardStatsQuery,
     useBulkMoveCardsMutation,
 } from "@/lib/api/cardApi";
-import type { Card } from "@/types/card.types";
+import type { Card, CardStats } from "@/types/card.types";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
 import { useBoardSocket } from "@/lib/socket/useBoardSocket";
-import { useBoardPermissions } from "@/hooks/usePermissions";
+import { useBoardPresence } from "@/lib/socket/useBoardPresence";
+import { useBoardPermissions, isSystemAdmin } from "@/hooks/usePermissions";
+import { useAuthToken } from "@/hooks/useAuthToken";
 import { getBoardColor } from "@/lib/boardColors";
-import { getBoardTheme } from "@/lib/boardTheme";
+import { getBoardTheme, BOARD_SCROLLBAR_X_CLASS, BOARD_SCROLLBAR_Y_CLASS, getBoardScrollbarStyle } from "@/lib/boardTheme";
 
 interface LocalList {
     id: number;
@@ -100,27 +110,53 @@ export default function BoardDetailPage() {
     const workspaceId = Number(params.id);
     const boardId = Number(params.boardId);
 
-    useBoardSocket(boardId);
+    const sessionReady = useAuthToken();
 
-    const { data: boardData, isLoading: boardLoading } = useGetBoardDetailQuery({ workspaceId, boardId });
-    const { data: listsData, isLoading: listsLoading } = useGetListsQuery({ workspaceId, boardId });
-    const { data: wsData } = useGetWorkspaceQuery(workspaceId);
-    const { data: profileData } = useGetProfileQuery();
-    const { data: boardMembersData } = useGetBoardMembersQuery({ workspaceId, boardId });
+    useBoardSocket(sessionReady ? boardId : null);
+
+    const {
+        data: boardData,
+        isLoading: boardLoading,
+        isFetching: boardFetching,
+        isError: boardIsError,
+        error: boardQueryError,
+        isUninitialized: boardUninitialized,
+        refetch: refetchBoard,
+    } = useGetBoardDetailQuery(
+        { workspaceId, boardId },
+        { skip: !sessionReady }
+    );
+    const { data: listsData, isLoading: listsLoading } = useGetListsQuery(
+        { workspaceId, boardId },
+        { skip: !sessionReady }
+    );
+    const { data: wsData } = useGetWorkspaceQuery(workspaceId, { skip: !sessionReady });
+    const { data: profileData } = useGetProfileQuery(undefined, { skip: !sessionReady });
+    const { data: boardMembersData } = useGetBoardMembersQuery(
+        { workspaceId, boardId },
+        { skip: !sessionReady }
+    );
     const [updateBoard] = useUpdateBoardMutation();
     const [createList, { isLoading: creatingList }] = useCreateListMutation();
     const [reorderLists] = useReorderListsMutation();
     const [moveCard] = useMoveCardMutation();
     const [reorderCards] = useReorderCardsMutation();
     const [bulkMoveCards, { isLoading: bulkMoving }] = useBulkMoveCardsMutation();
-    const { data: statsData } = useGetBoardStatsQuery({ workspaceId, boardId });
+    const { data: statsData } = useGetBoardStatsQuery(
+        { workspaceId, boardId },
+        { skip: !sessionReady }
+    );
+    const { data: unreadData } = useGetUnreadCountQuery(undefined, { skip: !sessionReady });
 
     const fromAdmin = searchParams.get("from") === "admin";
     const board = boardData?.data;
     const serverLists = listsData?.data;
     const workspace = wsData?.data;
     const currentUser = profileData?.data;
+    const unreadCount = unreadData?.data?.count ?? 0;
+    const profileHref = isSystemAdmin(currentUser?.role) ? "/admin/profile" : "/profile";
     const boardMembers = boardMembersData?.data ?? [];
+    const { viewingUsers, viewingCount } = useBoardPresence(boardId, boardMembers, currentUser?.id);
 
     const myBoardRole = boardMembers.find((m) => m.userId === currentUser?.id)?.role;
     const {
@@ -211,12 +247,23 @@ export default function BoardDetailPage() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
     const [archivedOpen, setArchivedOpen] = useState(false);
+    const [boardSwitcherOpen, setBoardSwitcherOpen] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
     const [selectedCardIds, setSelectedCardIds] = useState<Set<number>>(new Set());
     const [bulkTargetListId, setBulkTargetListId] = useState<number | "">("");
 
-    const boardStats = statsData?.data;
+    const handleCloseCard = useCallback(() => setDetailCard(null), []);
+    const handleCardUpdate = useCallback((updated: Card) => setDetailCard(updated), []);
+    const handleCardDeleted = useCallback((deletedCardId: number) => {
+        setLocalLists((prev) =>
+            prev.map((l) => ({
+                ...l,
+                cards: l.cards.filter((c) => c.id !== deletedCardId),
+            }))
+        );
+    }, []);
 
+    const boardStats = statsData?.data;
     const bgColor = getBoardColor(board?.background, boardId);
     const boardTheme = getBoardTheme(bgColor);
 
@@ -511,38 +558,63 @@ export default function BoardDetailPage() {
         return activeDragData.list ?? null;
     }, [activeDragData]);
 
-    if (boardLoading) {
+    const isBoardInitialLoading =
+        !sessionReady ||
+        boardUninitialized ||
+        boardLoading ||
+        (boardFetching && !board);
+
+    const showBoardError =
+        sessionReady &&
+        !boardUninitialized &&
+        !boardLoading &&
+        !boardFetching &&
+        (boardIsError || !board);
+
+    if (isBoardInitialLoading) {
+        return <BoardPageSkeleton />;
+    }
+
+    if (showBoardError) {
+        const errorMessage = boardIsError
+            ? parseApiError(boardQueryError)
+            : "This board doesn't exist or you don't have access.";
+
         return (
-            <div className="h-full flex flex-col" style={{ backgroundColor: "#0079BF" }}>
-                <div className="h-12 bg-black/20 flex items-center px-4 gap-4">
-                    <Skeleton className="h-5 w-32 bg-white/20" />
-                </div>
-                <div className="flex-1 flex gap-3 p-4 overflow-x-auto">
-                    {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-40 w-72 rounded-xl bg-white/20 shrink-0" />
-                    ))}
+            <div className="min-h-dvh flex items-center justify-center bg-[#f0f2f5] p-6">
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+                    <EmptyState
+                        icon={<LayoutGrid className="h-6 w-6" />}
+                        title="Couldn't load this board"
+                        description={errorMessage}
+                        className="py-0"
+                    />
+                    <div className="mt-6 flex flex-col-reverse sm:flex-row items-center justify-center gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => refetchBoard()}
+                            className="w-full sm:w-auto"
+                        >
+                            Try again
+                        </Button>
+                        <Button
+                            onClick={() => router.push(`/workspaces/${workspaceId}`)}
+                            className="w-full sm:w-auto"
+                        >
+                            Back to workspace
+                        </Button>
+                    </div>
                 </div>
             </div>
         );
     }
 
-    if (!board) {
-        return (
-            <div className="h-full flex items-center justify-center bg-slate-100 p-4">
-                <div className="text-center">
-                    <p className="text-slate-600 mb-4">Board not found or you don&apos;t have access.</p>
-                    <Button onClick={() => router.push(`/workspaces/${workspaceId}`)}>
-                        Back to workspace
-                    </Button>
-                </div>
-            </div>
-        );
-    }
+    if (!board) return null;
 
     return (
         <div
-            className="flex flex-col min-h-0 h-[calc(100dvh-3.5rem)] lg:h-full overflow-hidden"
-            style={{ backgroundColor: bgColor }}
+            className="flex flex-col min-h-0 h-dvh overflow-hidden"
+            style={{ backgroundColor: bgColor, ...getBoardScrollbarStyle(bgColor) }}
         >
             {fromAdmin && <AdminReturnBanner href="/admin/boards" />}
             {isViewOnly && (
@@ -563,7 +635,15 @@ export default function BoardDetailPage() {
                         <ArrowLeft className="h-4 w-4" />
                     </Link>
 
-                    <h1 className="text-sm font-bold text-white truncate">{board.name}</h1>
+                    <button
+                        type="button"
+                        onClick={() => setBoardSwitcherOpen(true)}
+                        className="flex items-center gap-1 min-w-0 group cursor-pointer"
+                        title="Switch board"
+                    >
+                        <h1 className="text-sm font-bold text-white truncate">{board.name}</h1>
+                        <ChevronDown className="h-3.5 w-3.5 text-white/70 shrink-0 group-hover:text-white" />
+                    </button>
 
                     {board.visibility === "private" && (
                         <div className="hidden sm:flex items-center gap-1 bg-black/20 rounded px-2 py-1 shrink-0">
@@ -594,15 +674,11 @@ export default function BoardDetailPage() {
                     )}
 
                     {boardStats && (
-                        <div className="hidden xl:flex items-center gap-2 ml-2 text-[11px] text-white/80 shrink-0">
-                            <span className="bg-black/20 rounded px-2 py-0.5">{boardStats.total} cards</span>
-                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("open")} open</span>
-                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("in_progress")} active</span>
-                            <span className="bg-black/20 rounded px-2 py-0.5">{getStatusCount("done")} done</span>
-                            {boardStats.overdue > 0 && (
-                                <span className="bg-red-500/40 rounded px-2 py-0.5">{boardStats.overdue} overdue</span>
-                            )}
-                        </div>
+                        <BoardStatsChips
+                            boardStats={boardStats}
+                            getStatusCount={getStatusCount}
+                            className="hidden xl:flex ml-2 shrink-0"
+                        />
                     )}
 
                     {effectiveBoardRole && (
@@ -617,17 +693,38 @@ export default function BoardDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    {viewingCount > 0 && (
+                        <div
+                            className="hidden md:flex items-center gap-1.5 mr-1 text-[11px] text-white/80"
+                            title={viewingUsers.map((u) => u.name).join(", ")}
+                        >
+                            <div className="flex -space-x-1.5">
+                                {viewingUsers.slice(0, 3).map((u) => (
+                                    <Avatar
+                                        key={u.id}
+                                        src={u.avatar}
+                                        name={u.name}
+                                        size="xs"
+                                        className="ring-2 ring-white/30"
+                                    />
+                                ))}
+                            </div>
+                            <span className="whitespace-nowrap">{viewingCount} viewing</span>
+                        </div>
+                    )}
+
                     {/* Member avatars stack */}
                     {boardMembers.length > 0 && (
                         <div className="hidden md:flex -space-x-2 mr-1">
                             {boardMembers.slice(0, 4).map((m) => (
-                                <div
+                                <Avatar
                                     key={m.id}
-                                    className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white/30"
+                                    src={m.user.avatar}
+                                    name={m.user.name}
+                                    size="sm"
+                                    className="ring-2 ring-white/30"
                                     title={m.user.name}
-                                >
-                                    {m.user.name[0].toUpperCase()}
-                                </div>
+                                />
                             ))}
                             {boardMembers.length > 4 && (
                                 <div className="h-7 w-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white/30">
@@ -683,6 +780,10 @@ export default function BoardDetailPage() {
                                 <Archive className="h-3.5 w-3.5" />
                                 Archived items
                             </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setBoardSwitcherOpen(true)}>
+                                <ChevronDown className="h-3.5 w-3.5" />
+                                Switch board
+                            </DropdownMenuItem>
                             {canEditBoard && (
                                 <DropdownMenuItem onSelect={() => setSelectMode(true)}>
                                     <CheckSquare className="h-3.5 w-3.5" />
@@ -710,16 +811,15 @@ export default function BoardDetailPage() {
             </div>
 
             {boardStats && (
-                <div className="xl:hidden shrink-0 flex items-center gap-2 px-3 py-1.5 bg-black/20 text-[11px] text-white/80 overflow-x-auto">
-                    <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.total} cards</span>
-                    {boardStats.overdue > 0 && (
-                        <span className="bg-red-500/40 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.overdue} overdue</span>
-                    )}
-                    <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("done")} done</span>
-                </div>
+                <BoardStatsChips
+                    boardStats={boardStats}
+                    getStatusCount={getStatusCount}
+                    className="xl:hidden shrink-0 px-3 py-1.5 bg-black/20 overflow-x-auto"
+                />
             )}
 
-            {/* DnD lists area */}
+            {/* DnD lists area — scrollbar flush to bottom; content padding clears floating nav */}
+            <div className="flex-1 min-h-0 flex flex-col">
             <DndContext
                 sensors={sensors}
                 collisionDetection={collisionDetection}
@@ -727,8 +827,14 @@ export default function BoardDetailPage() {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-                    <div className="flex gap-3 p-3 sm:p-4 items-start min-h-0 pb-6">
+                <div
+                    className={cn("flex-1 min-h-0", BOARD_SCROLLBAR_X_CLASS)}
+                    style={getBoardScrollbarStyle(bgColor)}
+                >
+                    <div
+                        className="flex gap-3 p-3 sm:p-4 items-start w-max min-w-full"
+                        style={{ paddingBottom: `calc(${BOARD_BOTTOM_NAV_HEIGHT} + 0.5rem)` }}
+                    >
                         {listsLoading ? (
                             <>
                                 {[1, 2, 3].map((i) => (
@@ -831,6 +937,7 @@ export default function BoardDetailPage() {
                     )}
                 </DragOverlay>
             </DndContext>
+            </div>
 
             {selectMode && (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-3 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl max-w-[95vw] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -865,14 +972,15 @@ export default function BoardDetailPage() {
             {/* Card detail modal */}
             <CardDetailModal
                 open={!!detailCard}
-                onClose={() => setDetailCard(null)}
+                onClose={handleCloseCard}
                 workspaceId={workspaceId}
                 boardId={boardId}
                 boardColor={bgColor}
                 card={detailCard}
                 lists={localLists.map((l) => ({ id: l.id, name: l.name }))}
                 readOnly={!canEditBoard}
-                onCardUpdate={(updated) => setDetailCard(updated)}
+                onCardUpdate={handleCardUpdate}
+                onCardDeleted={handleCardDeleted}
             />
 
             {/* Board settings modal */}
@@ -902,7 +1010,63 @@ export default function BoardDetailPage() {
                 workspaceId={workspaceId}
                 boardId={boardId}
                 canRestore={canEditBoard}
+                canDelete={canEditBoard}
             />
+
+            <BoardSwitcherSheet
+                open={boardSwitcherOpen}
+                onClose={() => setBoardSwitcherOpen(false)}
+                workspaceId={workspaceId}
+                currentBoardId={boardId}
+                boardColor={bgColor}
+                workspaceName={workspace?.name}
+            />
+
+            <BoardBottomNav
+                workspaceId={workspaceId}
+                boardId={boardId}
+                boardName={board.name}
+                boardColor={bgColor}
+                workspaceName={workspace?.name}
+                unreadCount={unreadCount}
+                canEditBoard={canEditBoard}
+                canManageBoard={canManageBoard}
+                profileHref={profileHref}
+                hidden={!!detailCard}
+                onSwitchBoard={() => setBoardSwitcherOpen(true)}
+                onAddList={() => setAddingList(true)}
+                onOpenMembers={() => setMembersOpen(true)}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenArchived={() => setArchivedOpen(true)}
+            />
+        </div>
+    );
+}
+
+function BoardStatsChips({
+    boardStats,
+    getStatusCount,
+    className,
+}: {
+    boardStats: CardStats;
+    getStatusCount: (status: string) => number;
+    className?: string;
+}) {
+    return (
+        <div className={cn("flex items-center gap-2 text-[11px] text-white/80", className)}>
+            <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.total} cards</span>
+            <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("open")} open</span>
+            <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("in_progress")} active</span>
+            <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("in_review")} review</span>
+            <span className="bg-black/20 rounded px-2 py-0.5 whitespace-nowrap">{getStatusCount("done")} done</span>
+            {boardStats.doneThisWeek > 0 && (
+                <span className="bg-emerald-500/30 rounded px-2 py-0.5 whitespace-nowrap">
+                    {boardStats.doneThisWeek} this week
+                </span>
+            )}
+            {boardStats.overdue > 0 && (
+                <span className="bg-red-500/40 rounded px-2 py-0.5 whitespace-nowrap">{boardStats.overdue} overdue</span>
+            )}
         </div>
     );
 }

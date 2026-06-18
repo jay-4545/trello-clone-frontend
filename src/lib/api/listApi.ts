@@ -35,7 +35,10 @@ export const listApi = baseApi.injectEndpoints({
 
         deleteList: build.mutation<ApiResponse<null>, { workspaceId: number; boardId: number; listId: number }>({
             query: ({ workspaceId, boardId, listId }) => ({ url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}`, method: "DELETE" }),
-            invalidatesTags: (_r, _e, { boardId }) => [{ type: "List", id: boardId }],
+            invalidatesTags: (_r, _e, { boardId }) => [
+                { type: "List", id: boardId },
+                { type: "List", id: `archived-${boardId}` },
+            ],
         }),
 
         reorderLists: build.mutation<ApiResponse<null>, { workspaceId: number; boardId: number; orderedIds: number[] }>({

@@ -1,8 +1,7 @@
 import type { AppDispatch } from "@/lib/store";
-import { baseApi } from "@/lib/api/baseApi";
 import { logout, setCredentials } from "@/store/slices/authSlice";
 import { resetUnread } from "@/store/slices/notificationSlice";
-import { disconnectSocket } from "@/lib/socket/socketClient";
+import { connectSocket, disconnectSocket } from "@/lib/socket/socketClient";
 import type { User } from "@/types/auth.types";
 
 let loggingOut = false;
@@ -30,7 +29,9 @@ export function clearAuthSession(
     // Resetting RTK cache while protected pages are still mounted refetches queries
     // (e.g. GET /workspaces). Defer reset to login via establishAuthSession instead.
     if (options?.resetApi) {
-        dispatch(baseApi.util.resetApiState());
+        void import("@/lib/api/baseApi").then(({ baseApi }) => {
+            dispatch(baseApi.util.resetApiState());
+        });
     }
 }
 
@@ -67,6 +68,9 @@ export function establishAuthSession(
     payload: { user: User; accessToken: string; refreshToken: string }
 ) {
     resetLoggingOut();
-    dispatch(baseApi.util.resetApiState());
+    void import("@/lib/api/baseApi").then(({ baseApi }) => {
+        dispatch(baseApi.util.resetApiState());
+    });
     dispatch(setCredentials(payload));
+    connectSocket();
 }

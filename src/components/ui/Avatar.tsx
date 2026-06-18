@@ -6,6 +6,7 @@ interface AvatarProps {
     name: string;
     size?: "xs" | "sm" | "md" | "lg";
     className?: string;
+    title?: string;
 }
 
 const sizeMap = {
@@ -35,18 +36,21 @@ function getColor(name: string) {
     return BG_COLORS[Math.abs(hash) % BG_COLORS.length];
 }
 
-export default function Avatar({ src, name, size = "md", className }: AvatarProps) {
+export default function Avatar({ src, name, size = "md", className, title }: AvatarProps) {
+    const tooltip = title ?? name;
     if (src) {
         return (
             <img
                 src={src}
                 alt={name}
+                title={tooltip}
                 className={cn("rounded-full object-cover shrink-0", sizeMap[size], className)}
             />
         );
     }
     return (
         <div
+            title={tooltip}
             className={cn(
                 "rounded-full flex items-center justify-center text-white font-semibold shrink-0",
                 sizeMap[size],

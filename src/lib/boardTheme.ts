@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { cn } from "@/utils/cn";
 
 function parseHex(hex: string): { r: number; g: number; b: number } | null {
@@ -45,6 +46,10 @@ export function darkenColor(boardColor: string, factor: number): string {
     return `rgb(${Math.round(rgb.r * f)}, ${Math.round(rgb.g * f)}, ${Math.round(rgb.b * f)})`;
 }
 
+export const BOARD_SCROLLBAR_CLASS = "board-scrollbar";
+export const BOARD_SCROLLBAR_X_CLASS = "board-scrollbar-x";
+export const BOARD_SCROLLBAR_Y_CLASS = "board-scrollbar-y";
+
 export interface BoardTheme {
     boardColor: string;
     /** True when board bg is very dark (rare); cards stay white regardless. */
@@ -71,7 +76,26 @@ export interface BoardTheme {
     modalBorder: string;
     modalInput: string;
     modalPill: string;
+    modalCoverBand: string;
+    modalActionPill: string;
     modalAccentStyle: { borderTopColor: string; borderTopWidth: string };
+}
+
+/** Board-themed scrollbar CSS variables (7px, matches board color). */
+export function getBoardScrollbarStyle(boardColor: string): CSSProperties {
+    const rgb = parseHex(boardColor);
+    const lum = rgb ? relativeLuminance(rgb.r, rgb.g, rgb.b) : 0.4;
+    const isLight = lum > 0.55;
+
+    const thumb = isLight ? darkenColor(boardColor, 0.28) : "rgba(255, 255, 255, 0.62)";
+    const thumbHover = isLight ? darkenColor(boardColor, 0.42) : "rgba(255, 255, 255, 0.82)";
+    const track = isLight ? "rgba(0, 0, 0, 0.14)" : "rgba(255, 255, 255, 0.22)";
+
+    return {
+        "--board-scrollbar-thumb": thumb,
+        "--board-scrollbar-thumb-hover": thumbHover,
+        "--board-scrollbar-track": track,
+    } as CSSProperties;
 }
 
 export function getBoardTheme(boardColor: string): BoardTheme {
@@ -101,12 +125,14 @@ export function getBoardTheme(boardColor: string): BoardTheme {
         addListBtn: "bg-white/25 hover:bg-white/40 text-white",
         dropZone: "border-slate-400/50 text-slate-500",
         modalSurface: "#ffffff",
-        modalSidebar: "#f8fafc",
+        modalSidebar: modalSidebar,
         modalText: "#172b4d",
         modalMuted: "#5e6c84",
         modalBorder: mixWithWhite(boardColor, 0.15),
         modalInput: "#ffffff",
         modalPill: mixWithWhite(boardColor, 0.1),
+        modalCoverBand: mixWithWhite(boardColor, 0.18),
+        modalActionPill: mixWithWhite(boardColor, 0.08),
         modalAccentStyle: {
             borderTopColor: boardColor,
             borderTopWidth: "4px",

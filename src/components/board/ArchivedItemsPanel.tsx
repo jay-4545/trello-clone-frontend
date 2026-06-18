@@ -1,16 +1,26 @@
 "use client";
 import { useState } from "react";
-import { Archive, X, RotateCcw, Loader2 } from "lucide-react";
+import { Archive, X, RotateCcw, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import Button from "@/components/ui/Button";
 import {
     useGetArchivedCardsQuery,
     useRestoreCardMutation,
+    useDeleteCardMutation,
 } from "@/lib/api/cardApi";
-import { useGetArchivedListsQuery, useRestoreListMutation } from "@/lib/api/listApi";
+import {
+    useGetArchivedListsQuery,
+    useRestoreListMutation,
+    useDeleteListMutation,
+} from "@/lib/api/listApi";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+
+type PendingDelete =
+    | { type: "card"; cardId: number; listId: number; title: string }
+    | { type: "list"; listId: number; name: string };
 
 interface Props {
     workspaceId: number;
@@ -18,10 +28,21 @@ interface Props {
     open: boolean;
     onClose: () => void;
     canRestore?: boolean;
+    canDelete?: boolean;
 }
 
-export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose, canRestore = true }: Props) {
+export default function ArchivedItemsPanel({
+    workspaceId,
+    boardId,
+    open,
+    onClose,
+    canRestore = true,
+    canDelete = true,
+}: Props) {
     const [tab, setTab] = useState<"cards" | "lists">("cards");
+    const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+    const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+    const [deletingListId, setDeletingListId] = useState<number | null>(null);
 
     const { data: cardsData, isLoading: loadingCards } = useGetArchivedCardsQuery(
         { workspaceId, boardId },
@@ -33,6 +54,8 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
     );
     const [restoreCard, { isLoading: restoringCard }] = useRestoreCardMutation();
     const [restoreList, { isLoading: restoringList }] = useRestoreListMutation();
+    const [deleteCard] = useDeleteCardMutation();
+    const [deleteList] = useDeleteListMutation();
 
     const archivedCards = cardsData?.data ?? [];
     const archivedLists = listsData?.data ?? [];
@@ -52,6 +75,36 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
             toast.success("List restored");
         } catch (err) {
             toast.error(parseApiError(err));
+        }
+    };
+
+    const handleDeleteCard = async () => {
+        if (!pendingDelete || pendingDelete.type !== "card") return;
+        const { cardId, listId } = pendingDelete;
+        setDeletingCardId(cardId);
+        try {
+            await deleteCard({ workspaceId, boardId, listId, cardId }).unwrap();
+            toast.success("Card deleted");
+            setPendingDelete(null);
+        } catch (err) {
+            toast.error(parseApiError(err));
+        } finally {
+            setDeletingCardId(null);
+        }
+    };
+
+    const handleDeleteList = async () => {
+        if (!pendingDelete || pendingDelete.type !== "list") return;
+        const { listId } = pendingDelete;
+        setDeletingListId(listId);
+        try {
+            await deleteList({ workspaceId, boardId, listId }).unwrap();
+            toast.success("List deleted");
+            setPendingDelete(null);
+        } catch (err) {
+            toast.error(parseApiError(err));
+        } finally {
+            setDeletingListId(null);
         }
     };
 
@@ -110,16 +163,39 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
                                         <p className="text-sm font-medium text-slate-900 truncate">{card.title}</p>
                                         <p className="text-xs text-slate-500">List #{card.listId}</p>
                                     </div>
-                                    {canRestore ? (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            loading={restoringCard}
-                                            onClick={() => handleRestoreCard(card.id, card.listId)}
-                                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
-                                        >
-                                            Restore
-                                        </Button>
+                                    {(canRestore || canDelete) ? (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {canRestore && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    loading={restoringCard}
+                                                    onClick={() => handleRestoreCard(card.id, card.listId)}
+                                                    leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                                                >
+                                                    Restore
+                                                </Button>
+                                            )}
+                                            {canDelete && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    loading={deletingCardId === card.id}
+                                                    onClick={() =>
+                                                        setPendingDelete({
+                                                            type: "card",
+                                                            cardId: card.id,
+                                                            listId: card.listId,
+                                                            title: card.title,
+                                                        })
+                                                    }
+                                                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            )}
+                                        </div>
                                     ) : (
                                         <span className="text-xs text-slate-400 shrink-0">View only</span>
                                     )}
@@ -142,16 +218,38 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
                                     className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50"
                                 >
                                     <p className="text-sm font-medium text-slate-900 min-w-0 truncate">{list.name}</p>
-                                    {canRestore ? (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            loading={restoringList}
-                                            onClick={() => handleRestoreList(list.id)}
-                                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
-                                        >
-                                            Restore
-                                        </Button>
+                                    {(canRestore || canDelete) ? (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {canRestore && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    loading={restoringList}
+                                                    onClick={() => handleRestoreList(list.id)}
+                                                    leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                                                >
+                                                    Restore
+                                                </Button>
+                                            )}
+                                            {canDelete && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    loading={deletingListId === list.id}
+                                                    onClick={() =>
+                                                        setPendingDelete({
+                                                            type: "list",
+                                                            listId: list.id,
+                                                            name: list.name,
+                                                        })
+                                                    }
+                                                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            )}
+                                        </div>
                                     ) : (
                                         <span className="text-xs text-slate-400 shrink-0">View only</span>
                                     )}
@@ -161,6 +259,28 @@ export default function ArchivedItemsPanel({ workspaceId, boardId, open, onClose
                     )}
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={pendingDelete?.type === "card"}
+                onClose={() => setPendingDelete(null)}
+                onConfirm={handleDeleteCard}
+                loading={deletingCardId !== null}
+                title={`Delete "${pendingDelete?.type === "card" ? pendingDelete.title : ""}"?`}
+                description="This card will be permanently deleted. This action cannot be undone."
+                confirmLabel="Delete"
+                variant="danger"
+            />
+
+            <ConfirmDialog
+                open={pendingDelete?.type === "list"}
+                onClose={() => setPendingDelete(null)}
+                onConfirm={handleDeleteList}
+                loading={deletingListId !== null}
+                title={`Delete "${pendingDelete?.type === "list" ? pendingDelete.name : ""}"?`}
+                description="This list and its archived cards will be permanently deleted. This action cannot be undone."
+                confirmLabel="Delete"
+                variant="danger"
+            />
         </>
     );
 }

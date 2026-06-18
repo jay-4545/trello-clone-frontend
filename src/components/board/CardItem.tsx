@@ -1,17 +1,10 @@
 "use client";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-    Clock,
-    CheckSquare,
-    Paperclip,
-    Eye,
-} from "lucide-react";
-import { format, isPast, isToday } from "date-fns";
 import type { Card } from "@/types/card.types";
 import type { BoardTheme } from "@/lib/boardTheme";
 import { cn } from "@/utils/cn";
-import Avatar from "@/components/ui/Avatar";
+import CardMetaBar from "@/components/board/CardMetaBar";
 
 const LABEL_COLORS = [
     "bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-rose-500",
@@ -84,25 +77,12 @@ export default function CardItem({ card, theme, onClick, isDragging, readOnly = 
                     />
                 </div>
             )}
-            <CardContent card={card} theme={theme} />
+            <CardContent card={card} />
         </div>
     );
 }
 
-export function CardContent({ card, theme }: { card: Card; theme: BoardTheme }) {
-    const hasChecklist = (card.checklist?.length ?? 0) > 0;
-    const completedItems = card.checklist?.filter((i) => i.completed).length ?? 0;
-    const totalItems = card.checklist?.length ?? 0;
-    const hasOverdue = card.dueDate && isPast(new Date(card.dueDate)) && card.status !== "done";
-    const isDueToday = card.dueDate && isToday(new Date(card.dueDate));
-    const attachmentCount = card.attachments?.length ?? 0;
-    const hasMeta =
-        card.dueDate ||
-        hasChecklist ||
-        attachmentCount > 0 ||
-        card.isWatched ||
-        (card.assignees?.length ?? 0) > 0;
-
+export function CardContent({ card }: { card: Card; theme?: BoardTheme }) {
     return (
         <>
             {card.coverImage && (
@@ -127,74 +107,14 @@ export function CardContent({ card, theme }: { card: Card; theme: BoardTheme }) 
                 </div>
             )}
 
-            <div className={cn("px-2 pb-2", card.coverImage ? "pt-2" : card.labels?.length ? "pt-1.5" : "pt-2")}>
+            <div className={cn(
+                "px-2 pb-2",
+                card.coverImage ? "pt-2" : card.labels?.length ? "pt-1.5" : "pt-2"
+            )}>
                 <p className="text-[13px] leading-[1.35] text-[#172b4d] font-normal break-words">
                     {card.title}
                 </p>
-
-                {hasMeta && (
-                    <div className="flex items-end justify-between gap-2 mt-2">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                            {card.dueDate && (
-                                <span
-                                    className={cn(
-                                        "inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-sm",
-                                        hasOverdue
-                                            ? "bg-[#ae2e24] text-white"
-                                            : isDueToday
-                                            ? "bg-[#E2B203] text-[#172b4d]"
-                                            : "bg-[#dcdfe4] text-[#44546f]"
-                                    )}
-                                >
-                                    <Clock className="h-3 w-3" />
-                                    {format(new Date(card.dueDate), "MMM d")}
-                                </span>
-                            )}
-
-                            {hasChecklist && (
-                                <span
-                                    className={cn(
-                                        "inline-flex items-center gap-1 text-[11px] text-[#44546f]",
-                                        completedItems === totalItems && "text-[#216e4e]"
-                                    )}
-                                >
-                                    <CheckSquare className="h-3 w-3" />
-                                    {completedItems}/{totalItems}
-                                </span>
-                            )}
-
-                            {attachmentCount > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[11px] text-[#44546f]">
-                                    <Paperclip className="h-3 w-3" />
-                                    {attachmentCount}
-                                </span>
-                            )}
-
-                            {card.isWatched && (
-                                <Eye className="h-3 w-3 text-[#44546f]" aria-label="Watching" />
-                            )}
-                        </div>
-
-                        {card.assignees && card.assignees.length > 0 && (
-                            <div className="flex -space-x-1 shrink-0">
-                                {card.assignees.slice(0, 3).map((a) => (
-                                    <Avatar
-                                        key={a.id}
-                                        src={a.user.avatar}
-                                        name={a.user.name}
-                                        size="xs"
-                                        className="ring-2 ring-white"
-                                    />
-                                ))}
-                                {card.assignees.length > 3 && (
-                                    <div className="h-6 w-6 rounded-full bg-[#dfe1e6] flex items-center justify-center text-[9px] font-bold text-[#44546f] ring-2 ring-white">
-                                        +{card.assignees.length - 3}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
+                <CardMetaBar card={card} variant="card" showLabels={false} className="mt-1.5" />
             </div>
         </>
     );

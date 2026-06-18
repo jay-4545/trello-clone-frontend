@@ -35,11 +35,15 @@ const authSlice = createSlice({
             state.isInitialized = true;
             token.clearAll();
         },
+        updateTokens: (state) => {
+            state.isAuthenticated = true;
+            state.isInitialized = true;
+        },
         setInitialized: (state) => {
             state.isInitialized = true;
         },
     },
 });
 
-export const { setCredentials, setUser, logout, setInitialized } = authSlice.actions;
+export const { setCredentials, setUser, logout, setInitialized, updateTokens } = authSlice.actions;
 export default authSlice.reducer;

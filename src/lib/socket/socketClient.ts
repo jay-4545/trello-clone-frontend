@@ -41,10 +41,25 @@ export function disconnectSocket() {
     socket = null;
 }
 
+/** Reconnect socket after token rotation so auth uses the latest access token. */
+export function reconnectSocketWithFreshToken() {
+    const s = getSocket();
+    if (!s) return;
+    syncSocketAuth(s);
+    if (s.connected) {
+        s.disconnect();
+        s.connect();
+    }
+}
+
 export function joinBoard(boardId: number) {
     getSocket()?.emit("board:join", { boardId });
 }
 
 export function leaveBoard(boardId: number) {
     getSocket()?.emit("board:leave", { boardId });
+}
+
+export function emitCardTyping(boardId: number, cardId: number) {
+    getSocket()?.emit("card:typing", { boardId, cardId });
 }

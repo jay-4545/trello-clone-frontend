@@ -15,6 +15,7 @@ interface ModalProps {
     size?: "sm" | "md" | "lg" | "xl";
     hideCloseButton?: boolean;
     className?: string;
+    containerClassName?: string;
 }
 
 const sizeMap = {
@@ -33,6 +34,7 @@ export default function Modal({
     size = "md",
     hideCloseButton = false,
     className,
+    containerClassName,
 }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +59,11 @@ export default function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 py-4"
+            data-confirm-dialog
+            className={cn(
+                "fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto p-4 py-4",
+                containerClassName
+            )}
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? "modal-title" : undefined}

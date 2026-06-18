@@ -16,4 +16,10 @@ export const BOARD_SOCKET_EVENTS = [
     "board:member_left",
 ] as const;
 
+export const PRESENCE_SOCKET_EVENTS = [
+    "presence:online",
+    "presence:offline",
+    "presence:viewing",
+] as const;
+
 export const NOTIFICATION_SOCKET_EVENT = "notification:new";

@@ -436,33 +436,36 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              {
+            {
                 name: "Free",
                 price: "$0",
                 period: "forever",
                 desc: "For individuals and small teams getting started.",
-                features: ["Unlimited boards", "Workspaces & members", "Real-time sync", "Card attachments"],
+                features: ["Unlimited boards", "Workspaces & members", "Real-time sync", "Card attachments", "Personal tasks"],
                 cta: "Get started free",
-                highlight: false,
-              },
-              {
+                highlight: true,
+                comingSoon: false,
+            },
+            {
                 name: "Team",
                 price: "$8",
                 period: "per user / month",
                 desc: "For growing teams that need more control.",
                 features: ["Everything in Free", "Advanced permissions", "Board stats", "Priority support"],
-                cta: "Start team trial",
-                highlight: true,
-              },
-              {
+                cta: "Coming soon",
+                highlight: false,
+                comingSoon: true,
+            },
+            {
                 name: "Business",
                 price: "$12",
                 period: "per user / month",
                 desc: "For organisations with advanced needs.",
-                features: ["Everything in Team", "Admin dashboard", "Audit logs", "SSO ready"],
-                cta: "Contact sales",
+                features: ["Everything in Team", "Admin dashboard", "Audit logs (planned)", "SSO (planned)"],
+                cta: "Coming soon",
                 highlight: false,
-              },
+                comingSoon: true,
+            },
             ].map((plan) => (
               <div
                 key={plan.name}
@@ -472,7 +475,14 @@ export default function HomePage() {
                     : "border-slate-200 bg-white"
                 }`}
               >
-                <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  {plan.name}
+                  {plan.comingSoon && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      Coming soon
+                    </span>
+                  )}
+                </h3>
                 <div className="mt-3 mb-2">
                   <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
                   <span className="text-sm text-slate-500 ml-1">{plan.period}</span>
@@ -486,16 +496,24 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/register"
-                  className={`block text-center text-sm font-semibold py-2.5 rounded-lg transition-colors ${
-                    plan.highlight
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "bg-slate-100 text-slate-800 hover:bg-slate-200"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
+                {plan.comingSoon ? (
+                  <span
+                    className="block text-center text-sm font-semibold py-2.5 rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed"
+                  >
+                    {plan.cta}
+                  </span>
+                ) : (
+                  <Link
+                    href="/register"
+                    className={`block text-center text-sm font-semibold py-2.5 rounded-lg transition-colors ${
+                      plan.highlight
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
               </div>
             ))}
           </div>

@@ -29,3 +29,94 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Board scrollbars — 7px, themed via --board-scrollbar-* CSS variables */
+.board-scrollbar,
+.board-scrollbar-x,
+.board-scrollbar-y {
+  scrollbar-width: thin;
+  scrollbar-color: var(--board-scrollbar-thumb, #64748b) var(--board-scrollbar-track, rgba(255, 255, 255, 0.2));
+}
+
+/* Horizontal board canvas scrollbar */
+.board-scrollbar-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.board-scrollbar-x::-webkit-scrollbar {
+  height: 7px;
+  width: 7px;
+}
+
+.board-scrollbar-x::-webkit-scrollbar-track:horizontal {
+  background: var(--board-scrollbar-track, rgba(255, 255, 255, 0.2));
+  border-radius: 0;
+  margin: 0;
+}
+
+.board-scrollbar-x::-webkit-scrollbar-thumb:horizontal {
+  background: var(--board-scrollbar-thumb, #64748b);
+  border-radius: 0;
+  min-width: 56px;
+}
+
+.board-scrollbar-x::-webkit-scrollbar-thumb:horizontal:hover {
+  background: var(--board-scrollbar-thumb-hover, #475569);
+}
+
+/* Vertical list column scrollbar */
+.board-scrollbar-y::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.board-scrollbar-y::-webkit-scrollbar-track:vertical {
+  background: var(--board-scrollbar-track, rgba(0, 0, 0, 0.08));
+  border-radius: 9999px;
+  margin: 4px 0;
+}
+
+.board-scrollbar-y::-webkit-scrollbar-thumb:vertical {
+  background: var(--board-scrollbar-thumb, #64748b);
+  border-radius: 9999px;
+  min-height: 40px;
+}
+
+.board-scrollbar-y::-webkit-scrollbar-thumb:vertical:hover {
+  background: var(--board-scrollbar-thumb-hover, #475569);
+}
+
+/* Generic fallback (both axes) */
+.board-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.board-scrollbar::-webkit-scrollbar-track {
+  background: var(--board-scrollbar-track, transparent);
+  border-radius: 9999px;
+}
+
+.board-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--board-scrollbar-thumb, #64748b);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.board-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--board-scrollbar-thumb-hover, #475569);
+  background-clip: padding-box;
+}
+
+.board-scrollbar::-webkit-scrollbar-corner,
+.board-scrollbar-x::-webkit-scrollbar-corner,
+.board-scrollbar-y::-webkit-scrollbar-corner {
+  background: transparent;
+}

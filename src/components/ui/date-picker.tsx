@@ -39,7 +39,7 @@ export default function DatePicker({
 
     return (
         <div className={cn("flex items-center gap-2", className)}>
-            <Popover>
+            <Popover modal={false}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"

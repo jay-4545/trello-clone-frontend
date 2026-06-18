@@ -85,9 +85,11 @@ export const cardApi = baseApi.injectEndpoints({
                 url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}`,
                 method: "DELETE",
             }),
-            invalidatesTags: (_r, _e, { listId, cardId }) => [
+            invalidatesTags: (_r, _e, { boardId, listId, cardId }) => [
                 { type: "Card", id: `list-${listId}` },
                 { type: "Card", id: cardId },
+                { type: "List", id: boardId },
+                { type: "Card", id: `archived-${boardId}` },
             ],
         }),
 
@@ -96,7 +98,12 @@ export const cardApi = baseApi.injectEndpoints({
                 url: `/workspaces/${workspaceId}/boards/${boardId}/lists/${listId}/cards/${cardId}/archive`,
                 method: "POST",
             }),
-            invalidatesTags: (_r, _e, { listId }) => [{ type: "Card", id: `list-${listId}` }],
+            invalidatesTags: (_r, _e, { boardId, listId, cardId }) => [
+                { type: "Card", id: `list-${listId}` },
+                { type: "Card", id: cardId },
+                { type: "List", id: boardId },
+                { type: "Card", id: `archived-${boardId}` },
+            ],
         }),
 
         restoreCard: build.mutation<ApiResponse<Card>, { workspaceId: number; boardId: number; listId: number; cardId: number }>({

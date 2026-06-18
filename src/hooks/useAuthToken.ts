@@ -9,6 +9,7 @@ import { isLoggingOut } from "@/store/authSession";
  */
 export function useAuthToken(): boolean {
     const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+    const isInitialized = useAppSelector((state) => state.auth.isInitialized);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -16,5 +17,6 @@ export function useAuthToken(): boolean {
     }, []);
 
     if (!mounted || isLoggingOut()) return false;
-    return isAuthenticated || !!token.getAccess();
+    if (!isInitialized) return false;
+    return isAuthenticated || token.hasSession();
 }

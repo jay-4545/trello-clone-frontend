@@ -12,6 +12,7 @@ import {
     Plus,
     Loader2,
     Briefcase,
+    CheckSquare,
     Menu,
     X,
     Shield,
@@ -32,6 +33,7 @@ import { useAuthToken } from "@/hooks/useAuthToken";
 import { isSystemAdmin } from "@/hooks/usePermissions";
 import RoleBadge from "@/components/roles/RoleBadge";
 import { APP_NAME } from "@/lib/brand";
+import { getWorkspaceColor } from "@/lib/workspaceColor";
 
 interface AppShellProps {
     children: React.ReactNode;
@@ -86,7 +88,8 @@ export default function AppShell({ children }: AppShellProps) {
 
     return (
         <div className="flex h-screen bg-slate-100 overflow-hidden">
-            {/* Mobile top bar */}
+            {/* Mobile top bar — hidden on board pages (board has its own header) */}
+            {!isBoardPage && (
             <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-[#0F172A] border-b border-slate-800 flex items-center justify-between px-4 shadow-sm">
                 <button
                     onClick={() => setMobileOpen(true)}
@@ -115,8 +118,9 @@ export default function AppShell({ children }: AppShellProps) {
                     )}
                 </Link>
             </div>
+            )}
 
-            {mobileOpen && (
+            {mobileOpen && !isBoardPage && (
                 <div
                     className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-in fade-in-0"
                     onClick={() => setMobileOpen(false)}
@@ -124,7 +128,8 @@ export default function AppShell({ children }: AppShellProps) {
                 />
             )}
 
-            {/* Sidebar — Trello-style dark navy */}
+            {/* Sidebar — hidden on board pages for full-width Kanban */}
+            {!isBoardPage && (
             <aside
                 className={cn(
                     "flex flex-col bg-gradient-to-b from-[#0F172A] via-[#111A2E] to-[#0F172A] border-r border-slate-800 transition-all duration-300 shrink-0 z-50 text-slate-200",
@@ -220,7 +225,7 @@ export default function AppShell({ children }: AppShellProps) {
                                     )}
                                     <div
                                         className="h-6 w-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm"
-                                        style={{ background: `hsl(${(ws.id * 47) % 360}, 65%, 50%)` }}
+                                        style={{ background: getWorkspaceColor(ws.id) }}
                                     >
                                         {ws.name[0].toUpperCase()}
                                     </div>
@@ -258,6 +263,13 @@ export default function AppShell({ children }: AppShellProps) {
                         label="All Workspaces"
                         collapsed={collapsed && !mobileOpen}
                         active={pathname === "/workspaces"}
+                    />
+                    <SidebarLink
+                        href="/todos"
+                        icon={<CheckSquare className="h-4 w-4" />}
+                        label="My Tasks"
+                        collapsed={collapsed && !mobileOpen}
+                        active={pathname === "/todos"}
                     />
                     {showAdminNav && (
                         <SidebarLink
@@ -380,10 +392,12 @@ export default function AppShell({ children }: AppShellProps) {
                     {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
                 </button>
             </aside>
+            )}
 
             {/* Main content */}
             <main className={cn(
-                "flex-1 min-h-0 pt-14 lg:pt-0 bg-slate-100",
+                "flex-1 min-h-0 bg-slate-100",
+                !isBoardPage && "pt-14 lg:pt-0",
                 isBoardPage ? "overflow-hidden" : "overflow-y-auto"
             )}>
                 {children}

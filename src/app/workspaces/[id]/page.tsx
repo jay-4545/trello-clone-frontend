@@ -32,6 +32,7 @@ import { useGetBoardsQuery, useUpdateBoardMutation } from "@/lib/api/boardApi";
 import { useGetProfileQuery } from "@/lib/api/authApi";
 import type { Board } from "@/lib/api/boardApi";
 import { useWorkspacePermissions } from "@/hooks/usePermissions";
+import { useAuthToken } from "@/hooks/useAuthToken";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
 import { getBoardColor } from "@/lib/boardColors";
@@ -52,11 +53,24 @@ export default function WorkspaceDetailPage() {
     const [inviteOpen, setInviteOpen] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
 
-    const { data: wsData, isLoading: wsLoading } = useGetWorkspaceQuery(workspaceId);
-    const { data: boardsData, isLoading: boardsLoading } = useGetBoardsQuery(workspaceId);
-    const { data: closedBoardsData } = useGetBoardsQuery({ workspaceId, closedOnly: true });
-    const { data: membersData } = useGetWorkspaceMembersQuery(workspaceId);
-    const { data: profileData } = useGetProfileQuery();
+    const sessionReady = useAuthToken();
+
+    const {
+        data: wsData,
+        isLoading: wsLoading,
+        isFetching: wsFetching,
+        isError: wsIsError,
+        error: wsQueryError,
+        isUninitialized: wsUninitialized,
+        refetch: refetchWorkspace,
+    } = useGetWorkspaceQuery(workspaceId, { skip: !sessionReady });
+    const { data: boardsData, isLoading: boardsLoading } = useGetBoardsQuery(workspaceId, { skip: !sessionReady });
+    const { data: closedBoardsData } = useGetBoardsQuery(
+        { workspaceId, closedOnly: true },
+        { skip: !sessionReady }
+    );
+    const { data: membersData } = useGetWorkspaceMembersQuery(workspaceId, { skip: !sessionReady });
+    const { data: profileData } = useGetProfileQuery(undefined, { skip: !sessionReady });
     const [updateBoard] = useUpdateBoardMutation();
 
     const workspace = wsData?.data;
@@ -97,7 +111,7 @@ export default function WorkspaceDetailPage() {
         }
     };
 
-    if (wsLoading) {
+    if (!sessionReady || wsUninitialized || wsLoading || (wsFetching && !workspace)) {
         return (
             <div className="min-h-full bg-[#f0f2f5]">
                 <WorkspaceHeaderSkeleton />
@@ -108,15 +122,29 @@ export default function WorkspaceDetailPage() {
         );
     }
 
-    if (!workspace) {
+    if (wsIsError || !workspace) {
+        const errorMessage = wsIsError
+            ? parseApiError(wsQueryError)
+            : "This workspace doesn't exist or you don't have access.";
+
         return (
             <div className="min-h-full bg-[#f0f2f5] flex items-center justify-center p-6">
-                <EmptyState
-                    icon={<LayoutGrid className="h-6 w-6" />}
-                    title="Workspace not found"
-                    description="This workspace doesn't exist or you don't have access."
-                    action={{ label: "Back to workspaces", onClick: () => router.push("/workspaces") }}
-                />
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+                    <EmptyState
+                        icon={<LayoutGrid className="h-6 w-6" />}
+                        title="Couldn't load this workspace"
+                        description={errorMessage}
+                        className="py-0"
+                    />
+                    <div className="mt-6 flex flex-col-reverse sm:flex-row items-center justify-center gap-2">
+                        <Button variant="outline" onClick={() => refetchWorkspace()} className="w-full sm:w-auto">
+                            Try again
+                        </Button>
+                        <Button onClick={() => router.push("/workspaces")} className="w-full sm:w-auto">
+                            Back to workspaces
+                        </Button>
+                    </div>
+                </div>
             </div>
         );
     }

@@ -6,15 +6,17 @@ const PUBLIC_PATHS = ["/", "/login", "/register", "/verify-email"];
 
 export function middleware(request: NextRequest) {
     const accessToken = request.cookies.get("access_token")?.value;
+    const refreshToken = request.cookies.get("refresh_token")?.value;
+    const hasSession = !!(accessToken || refreshToken);
     const { pathname } = request.nextUrl;
 
     const isPublic = PUBLIC_PATHS.some((p) =>
         p === "/" ? pathname === "/" : pathname.startsWith(p)
     );
 
-    // Only gate protected routes. Do NOT redirect /login → /workspaces here:
-    // a stale cookie caused middleware → workspaces → API 401 → /login loops.
-    if (!accessToken && !isPublic) {
+    // Allow protected routes when a refresh token exists so the client can rotate tokens.
+    // Do NOT redirect /login → /workspaces here (stale cookie loops).
+    if (!hasSession && !isPublic) {
         return NextResponse.redirect(new URL("/login", request.url));
     }
 

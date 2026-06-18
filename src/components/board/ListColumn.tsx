@@ -4,24 +4,25 @@ import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, MoreHorizontal, X, GripVertical, Archive, Pencil, Settings } from "lucide-react";
+import { Plus, MoreHorizontal, X, GripVertical, Archive, Pencil, Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import CardItem from "./CardItem";
-import CreateCardModal from "./CreateCardModal";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Card } from "@/types/card.types";
 import type { BoardTheme } from "@/lib/boardTheme";
-import { getBoardTheme } from "@/lib/boardTheme";
+import { getBoardTheme, BOARD_SCROLLBAR_Y_CLASS, getBoardScrollbarStyle } from "@/lib/boardTheme";
 import { useCreateCardMutation } from "@/lib/api/cardApi";
-import { useArchiveListMutation, useUpdateListMutation } from "@/lib/api/listApi";
+import { useArchiveListMutation, useDeleteListMutation, useUpdateListMutation } from "@/lib/api/listApi";
 import { parseApiError } from "@/utils/errorParser";
 import { cn } from "@/utils/cn";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface LocalList {
     id: number;
@@ -59,11 +60,12 @@ export default function ListColumn({
     const [nameValue, setNameValue] = useState(list.name);
     const [addingCard, setAddingCard] = useState(false);
     const [cardTitle, setCardTitle] = useState("");
-    const [detailedCreateOpen, setDetailedCreateOpen] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<"archive" | "delete" | null>(null);
 
     const [createCard, { isLoading: creatingCard }] = useCreateCardMutation();
     const [updateList] = useUpdateListMutation();
     const [archiveList] = useArchiveListMutation();
+    const [deleteList, { isLoading: deletingList }] = useDeleteListMutation();
 
     const {
         attributes,
@@ -109,6 +111,21 @@ export default function ListColumn({
         }
     };
 
+    const handleCreateCardWithDetails = async () => {
+        try {
+            const res = await createCard({
+                workspaceId,
+                boardId,
+                listId: list.id,
+                body: { title: `New card in ${list.name}` },
+            }).unwrap();
+            const card = res.data;
+            if (card) onCardClick(card);
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
     const handleRename = async () => {
         const name = nameValue.trim();
         if (!name || name === list.name) {
@@ -127,14 +144,32 @@ export default function ListColumn({
     };
 
     const handleArchive = async () => {
-        if (!confirm(`Archive list "${list.name}"?`)) return;
         try {
             await archiveList({ workspaceId, boardId, listId: list.id }).unwrap();
             toast.success("List archived");
+            setConfirmAction(null);
         } catch (err) {
             toast.error(parseApiError(err));
         }
     };
+
+    const handleDelete = async () => {
+        try {
+            await deleteList({ workspaceId, boardId, listId: list.id }).unwrap();
+            toast.success("List deleted");
+            setConfirmAction(null);
+        } catch (err) {
+            toast.error(parseApiError(err));
+        }
+    };
+
+    const deleteDescription = (() => {
+        const cardCount = list.cards.length;
+        if (cardCount > 0) {
+            return `This will permanently delete "${list.name}" and all ${cardCount} card${cardCount === 1 ? "" : "s"}. This action cannot be undone.`;
+        }
+        return `This will permanently delete "${list.name}". This action cannot be undone.`;
+    })();
 
     return (
         <>
@@ -217,16 +252,22 @@ export default function ListColumn({
                                 <Plus className="h-3.5 w-3.5" />
                                 Add card
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setDetailedCreateOpen(true)}>
+                            <DropdownMenuItem onSelect={handleCreateCardWithDetails}>
                                 <Settings className="h-3.5 w-3.5" />
                                 Add card with details…
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={handleArchive}
-                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                            >
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => setConfirmAction("archive")}>
                                 <Archive className="h-3.5 w-3.5" />
                                 Archive list
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => setConfirmAction("delete")}
+                                disabled={deletingList}
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete list
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -236,7 +277,11 @@ export default function ListColumn({
             {/* Cards area */}
             <div
                 ref={setDroppableRef}
-                className="flex-1 overflow-y-auto px-2 pb-1 space-y-2 min-h-0"
+                className={cn(
+                    "flex-1 overflow-y-auto px-2 pb-1 space-y-2 min-h-0",
+                    BOARD_SCROLLBAR_Y_CLASS
+                )}
+                style={getBoardScrollbarStyle(boardColor)}
             >
                 <SortableContext
                     items={list.cards.map((c) => `card-${c.id}`)}
@@ -324,13 +369,25 @@ export default function ListColumn({
             )}
         </div>
 
-        <CreateCardModal
-            open={detailedCreateOpen}
-            onClose={() => setDetailedCreateOpen(false)}
-            workspaceId={workspaceId}
-            boardId={boardId}
-            listId={list.id}
-            listName={list.name}
+        <ConfirmDialog
+            open={confirmAction === "archive"}
+            onClose={() => setConfirmAction(null)}
+            onConfirm={handleArchive}
+            title={`Archive "${list.name}"?`}
+            description="The list and its cards will move to archived items. You can restore them later."
+            confirmLabel="Archive"
+            variant="primary"
+        />
+
+        <ConfirmDialog
+            open={confirmAction === "delete"}
+            onClose={() => setConfirmAction(null)}
+            onConfirm={handleDelete}
+            loading={deletingList}
+            title={`Delete "${list.name}"?`}
+            description={deleteDescription}
+            confirmLabel="Delete"
+            variant="danger"
         />
         </>
     );

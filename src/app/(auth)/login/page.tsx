@@ -1,4 +1,3 @@
-// src/app/(auth)/login/page.tsx
 import type { Metadata } from "next";
 import LoginForm from "@/components/auth/LoginForm";
 import { APP_NAME } from "@/lib/brand";
